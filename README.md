@@ -12,24 +12,32 @@ ScreenCast / GlobalShortcuts / InputCapture stay on
 picker itself is Omarchy-styled (`omarchy-share-picker`). Screenshot,
 FileChooser, and the rest of the GTK half are this backend.
 
+**Implemented vs not:** see [docs/STATUS.md](docs/STATUS.md).
+
 ## Interfaces
 
-| Interface | Implementation |
-|-----------|----------------|
-| FileChooser | Native file browser (Open / Save / SaveFiles, filters, Places) |
-| Settings | Reads `~/.local/state/omarchy/current/theme/colors.toml` and emits `SettingChanged` |
-| AppChooser | Desktop-file picker with icons |
-| Account | Confirm + passwd / `~/.face` |
-| Access | Grant / deny dialog |
-| Notification | `omarchy-notification-send` |
-| Inhibit | `systemd-inhibit` plus `CreateMonitor` / lock via Hyprland |
-| Email | `xdg-email` |
-| Wallpaper | `omarchy-theme-bg-set` |
-| Screenshot | Confirm dialog + `grim` / `slurp` / `hyprpicker` |
-| Background | Confirm + `~/.config/autostart` |
-| DynamicLauncher | Confirm install; software-center token allowlist |
-| Lockdown | Defaults matching a desktop session |
-| Secret | Routed to `gnome-keyring` |
+| Interface | Status | Notes |
+|-----------|--------|-------|
+| FileChooser | done | Open / Save / Places / filters / new folder / overwrite |
+| Settings | done | `colors.toml` + `SettingChanged` |
+| AppChooser | done | Desktop-file picker with icons |
+| Account | done | Confirm + passwd / `~/.face` |
+| Access | done | Grant / deny dialog |
+| Notification | done | `omarchy-notification-send` |
+| Inhibit | done | `systemd-inhibit` + lock monitor |
+| Email | done | `xdg-email` |
+| Wallpaper | done | `omarchy-theme-bg-set` |
+| Screenshot | done | Omarchy dialog + `grim` / `slurp` / `hyprpicker` |
+| Background | done | Confirm + `~/.config/autostart` |
+| DynamicLauncher | done | Confirm install; software-center token allowlist |
+| Lockdown | stub | Defaults for a desktop session |
+| ScreenCast | delegated | Hyprland capture; Omarchy share picker |
+| GlobalShortcuts | delegated | Hyprland |
+| InputCapture | delegated | Hyprland |
+| Secret | delegated | `gnome-keyring` |
+| Print | **not implemented** | Deferred |
+| RemoteDesktop | **not implemented** | |
+| Clipboard / Usb | **not implemented** | |
 
 ## Build
 
