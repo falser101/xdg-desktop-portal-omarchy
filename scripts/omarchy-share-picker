@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# XDPH custom_picker_binary: Omarchy-styled share picker via omarchy-shell.
+# stdout must match hyprland-share-picker: `[SELECTION]r?/screen:NAME|window:ID|region:OUT@x,y,w,h`
+set -euo pipefail
+tmp=$(mktemp -d /tmp/omarchy-share-XXXXXX)
+reply="$tmp/reply.json"
+done="$tmp/done"
+allow=false
+for a in "$@"; do
+  [[ $a == --allow-token ]] && allow=true
+done
+
+payload=$(python3 - "$reply" "$done" "$allow" <<'PY'
+import json, os, sys
+
+reply, done, allow = sys.argv[1], sys.argv[2], sys.argv[3] == "true"
+
+
+def parse_windows(env: str):
+    # id[HC>]class[HT>]title[HE>]address[HA>]
+    out = []
+    rolling = env or ""
+    while rolling:
+        id_sep = rolling.find("[HC>]")
+        class_sep = rolling.find("[HT>]")
+        title_sep = rolling.find("[HE>]")
+        addr_sep = rolling.find("[HA>]")
+        if min(id_sep, class_sep, title_sep, addr_sep) < 0:
+            break
+        out.append({
+            "id": rolling[:id_sep],
+            "class": rolling[id_sep + 5:class_sep],
+            "title": rolling[class_sep + 5:title_sep],
+            "address": rolling[title_sep + 5:addr_sep],
+        })
+        rolling = rolling[addr_sep + 5:]
+    return out
+
+
+print(json.dumps({
+    "kind": "Share",
+    "request": {},
+    "extra": {
+        "allowToken": allow,
+        "windows": parse_windows(os.environ.get("XDPH_WINDOW_SHARING_LIST", "")),
+    },
+    "replyFile": reply,
+    "doneFile": done,
+}))
+PY
+)
+
+cleanup() { rm -rf "$tmp"; }
+trap cleanup EXIT
+
+if ! omarchy-shell shell summon omarchy-portal "$payload" >/dev/null; then
+  echo "[SELECTION]/"
+  exit 1
+fi
+
+selection=""
+for _ in $(seq 1 6000); do
+  if [[ -f $done ]]; then
+    selection=$(python3 - "$reply" <<'PY'
+import json, sys
+try:
+    data = json.load(open(sys.argv[1]))
+except Exception:
+    data = {}
+print(data.get("selection") or "[SELECTION]/")
+PY
+)
+    break
+  fi
+  sleep 0.05
+done
+
+if [[ -z ${selection} ]]; then
+  echo "[SELECTION]/"
+  exit 1
+fi
+
+if [[ $selection == REGION_PICK ]]; then
+  # Give the floating dialog a moment to close before slurp grabs the screen.
+  sleep 0.15
+  region=$(slurp -f '%o@%X,%Y,%W,%H' 2>/dev/null || true)
+  if [[ -z $region ]]; then
+    echo "[SELECTION]/"
+    exit 1
+  fi
+  token=""
+  [[ $allow == true ]] && token=r
+  echo "[SELECTION]${token}/region:${region}"
+  exit 0
+fi
+
+echo "$selection"
+exit 0

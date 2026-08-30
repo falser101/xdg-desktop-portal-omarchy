@@ -1,0 +1,13 @@
+[Unit]
+Description=Portal service (Omarchy implementation)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.omarchy
+ExecStart=/usr/lib/xdg-desktop-portal-omarchy
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.omarchy
+Exec=/usr/lib/xdg-desktop-portal-omarchy
+SystemdService=xdg-desktop-portal-omarchy.service
