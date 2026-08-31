@@ -86,9 +86,13 @@ EOF
 fi
 
 HYPR="$CONFIG/hypr/hyprland.lua"
-RULE='o.window("xdg-desktop-portal-omarchy", { tag = "+floating-window" })'
-if [[ -f $HYPR ]] && ! grep -Fq 'xdg-desktop-portal-omarchy' "$HYPR"; then
-  printf '\n-- float Omarchy portal dialogs\n%s\n' "$RULE" >>"$HYPR"
+if [[ -f $HYPR ]] && ! grep -Fq 'Omarchy Portal' "$HYPR"; then
+  cat >>"$HYPR" <<'EOF'
+
+-- Portal dialogs: opaque popup surface so dark-theme text stays readable
+o.window({ class = "^org.quickshell$", title = "^Omarchy Portal$" }, { tag = "-default-opacity", opacity = "1 1" })
+o.window("xdg-desktop-portal-omarchy", { tag = "-default-opacity +floating-window", opacity = "1 1" })
+EOF
 fi
 
 systemctl --user daemon-reload

@@ -12,32 +12,32 @@ ScreenCast / GlobalShortcuts / InputCapture stay on
 picker itself is Omarchy-styled (`omarchy-share-picker`). Screenshot,
 FileChooser, and the rest of the GTK half are this backend.
 
-**Implemented vs not:** see [docs/STATUS.md](docs/STATUS.md).
+**Implemented vs not:** [docs/STATUS.md](docs/STATUS.md)（总表）+ [docs/portals/](docs/portals/)（每个 portal 单独记录已完成与延后项，含对照 KDE）。
 
 ## Interfaces
 
 | Interface | Status | Notes |
 |-----------|--------|-------|
-| FileChooser | done | Open / Save / Places / filters / new folder / overwrite |
-| Settings | done | `colors.toml` + `SettingChanged` |
-| AppChooser | done | Desktop-file picker with icons |
-| Account | done | Confirm + passwd / `~/.face` |
-| Access | done | Grant / deny dialog |
-| Notification | done | `omarchy-notification-send` |
-| Inhibit | done | `systemd-inhibit` + lock monitor |
-| Email | done | `xdg-email` |
-| Wallpaper | done | `omarchy-theme-bg-set` |
-| Screenshot | done | Omarchy dialog + `grim` / `slurp` / `hyprpicker` |
-| Background | done | Confirm + `~/.config/autostart` |
-| DynamicLauncher | done | Confirm install; software-center token allowlist |
-| Lockdown | stub | Defaults for a desktop session |
-| ScreenCast | delegated | Hyprland capture; Omarchy share picker |
-| GlobalShortcuts | delegated | Hyprland |
-| InputCapture | delegated | Hyprland |
-| Secret | delegated | `gnome-keyring` |
-| Print | **not implemented** | Deferred |
-| RemoteDesktop | **not implemented** | |
-| Clipboard / Usb | **not implemented** | |
+| FileChooser | done | [docs/portals/FileChooser.md](docs/portals/FileChooser.md) — Open/Save/Recent/choices；延后 parent_window / 沙箱路径 / KIO |
+| Settings | done | [docs/portals/Settings.md](docs/portals/Settings.md) |
+| AppChooser | done | [docs/portals/AppChooser.md](docs/portals/AppChooser.md) |
+| Account | done | [docs/portals/Account.md](docs/portals/Account.md) |
+| Access | done | [docs/portals/Access.md](docs/portals/Access.md) |
+| Notification | done | [docs/portals/Notification.md](docs/portals/Notification.md) |
+| Inhibit | done | [docs/portals/Inhibit.md](docs/portals/Inhibit.md) |
+| Email | done | [docs/portals/Email.md](docs/portals/Email.md) |
+| Wallpaper | done | [docs/portals/Wallpaper.md](docs/portals/Wallpaper.md) |
+| Screenshot | done | [docs/portals/Screenshot.md](docs/portals/Screenshot.md) |
+| Background | done | [docs/portals/Background.md](docs/portals/Background.md) |
+| DynamicLauncher | done | [docs/portals/DynamicLauncher.md](docs/portals/DynamicLauncher.md) |
+| Lockdown | stub | [docs/portals/Lockdown.md](docs/portals/Lockdown.md) |
+| ScreenCast | delegated | [docs/portals/ScreenCast.md](docs/portals/ScreenCast.md) |
+| GlobalShortcuts | delegated | [docs/portals/GlobalShortcuts.md](docs/portals/GlobalShortcuts.md) |
+| InputCapture | delegated | [docs/portals/InputCapture.md](docs/portals/InputCapture.md) |
+| Secret | delegated | [docs/portals/Secret.md](docs/portals/Secret.md) |
+| Print | **not implemented** | [docs/portals/Print.md](docs/portals/Print.md) |
+| RemoteDesktop | **not implemented** | [docs/portals/RemoteDesktop.md](docs/portals/RemoteDesktop.md) |
+| Clipboard / Usb | **not implemented** | [Clipboard](docs/portals/Clipboard.md) / [Usb](docs/portals/Usb.md) |
 
 ## Build
 

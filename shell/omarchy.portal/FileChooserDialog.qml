@@ -29,21 +29,39 @@ PortalDialog {
   property var choiceValues: ({})
   property var folderNames: []
   property bool selectedIsDir: false
+  property bool recentMode: false
+  property bool pathEditing: false
+  property string pathEdit: ""
+  property string lastSegmentEdit: ""
+  property string sortKey: "name"
+  property bool sortReversed: false
 
   title: String(request.title || (saveMode ? "Save" : (dirMode ? "Select folder" : "Open")))
   acceptText: String(request.accept_label || (saveMode || saveFilesMode ? "Save" : (dirMode ? "Select" : "Open")))
   acceptable: canAccept()
   showButtons: false
   cardWidth: Style.space(960)
-  cardHeight: Style.space(620)
+  cardHeight: Style.space(640)
   focus: true
   readonly property int footerBarHeight: Style.spacing.controlHeight
+  readonly property int rowHeight: Style.spacing.controlHeight
+  readonly property int iconColWidth: Style.space(22)
+  readonly property int dateColWidth: Style.space(140)
+  readonly property int sizeColWidth: Style.space(80)
+  readonly property int sidebarWidth: Style.space(200)
+  readonly property string recentPlace: "recent:"
+  readonly property color contentText: Color.popups.text
+  readonly property color dimText: Util.alpha(Color.popups.text, 0.72)
+  readonly property color selectedBackground: Color.menu.selectedBackground
+  readonly property color selectedText: Color.menu.selectedText
+  readonly property var selectedBorderSpec: Border.surfaceSpec("menu", "selected-border", Color.menu.selectedBorder, 0)
 
   signal picked(var paths, var choices, var currentFilter)
 
   readonly property var places: extra.places || [
     { label: "Home", path: Quickshell.env("HOME") || "/" }
   ]
+  readonly property var recentItems: extra.recent || []
   readonly property var filters: (extra.filters && extra.filters.length) ? extra.filters : requestFilters()
   readonly property var choices: request.choices || []
   readonly property string currentPath: String(folder).replace(/^file:\/\//, "")
@@ -56,6 +74,8 @@ PortalDialog {
   readonly property bool previewIsImage: previewPath.length > 0 && isImagePath(previewPath)
   readonly property bool previewIsText: previewPath.length > 0 && isTextPath(previewPath) && !previewIsImage
   readonly property bool previewVisible: previewIsImage || (previewIsText && previewText.length > 0)
+  readonly property var crumbs: breadcrumbCrumbs()
+  readonly property var recentRows: buildRecentRows()
 
   function requestFilters() {
     var raw = request.filters || []
@@ -94,20 +114,93 @@ PortalDialog {
     return selectedPaths.length > 0 && !selectedIsDir
   }
 
+  function breadcrumbCrumbs() {
+    if (recentMode)
+      return [{ label: "Recent", path: recentPlace }]
+    var path = currentPath.replace(/\/$/, "") || "/"
+    var out = [{ label: "/", path: "/" }]
+    if (path === "/")
+      return out
+    var parts = path.split("/")
+    var acc = ""
+    for (var i = 1; i < parts.length; i++) {
+      if (!parts[i].length) continue
+      acc += "/" + parts[i]
+      out.push({ label: parts[i], path: acc })
+    }
+    return out
+  }
+
+  function syncPathEdits() {
+    pathEdit = recentMode ? recentPlace : currentPath
+    var c = breadcrumbCrumbs()
+    lastSegmentEdit = c.length ? String(c[c.length - 1].label) : ""
+  }
+
   function goTo(path) {
     var p = String(path || "")
     if (!p) return
+    if (p === recentPlace) {
+      recentMode = true
+      pathEditing = false
+      selectedPaths = []
+      selectedIsDir = false
+      previewText = ""
+      syncPathEdits()
+      return
+    }
+    recentMode = false
+    pathEditing = false
     root.folder = folderUrl(p)
     root.selectedPaths = []
     root.selectedIsDir = false
     root.previewText = ""
+    syncPathEdits()
   }
 
   function goParent() {
+    if (recentMode) {
+      goTo(Quickshell.env("HOME") || "/")
+      return
+    }
     var path = currentPath.replace(/\/$/, "")
     if (path === "" || path === "/") return
     var parent = path.replace(/\/[^\/]+$/, "")
     goTo(parent.length ? parent : "/")
+  }
+
+  function commitPathEdit(text) {
+    var p = String(text || "").trim()
+    if (!p) return
+    if (p === recentPlace) {
+      goTo(recentPlace)
+      return
+    }
+    if (p.charAt(0) !== "/") p = "/" + p
+    goTo(p)
+  }
+
+  function commitLastSegment(text) {
+    var name = String(text || "").trim()
+    if (!name.length) return
+    if (recentMode || name.charAt(0) === "/" || name === recentPlace) {
+      commitPathEdit(name)
+      return
+    }
+    if (name === "..") {
+      goParent()
+      return
+    }
+    var c = crumbs
+    if (c.length <= 1) {
+      goTo("/" + name)
+      return
+    }
+    var parent = String(c[c.length - 2].path)
+    if (parent === "/")
+      goTo("/" + name)
+    else
+      goTo(parent + "/" + name)
   }
 
   function currentGlobs() {
@@ -219,7 +312,10 @@ PortalDialog {
       return
     }
     if (dirMode) {
-      emitPicked(selectedPaths.length && selectedIsDir ? selectedPaths.slice() : [currentPath])
+      if (selectedPaths.length && selectedIsDir)
+        emitPicked(selectedPaths.slice())
+      else if (!recentMode)
+        emitPicked([currentPath])
       return
     }
     if (selectedPaths.length === 1 && selectedIsDir) {
@@ -274,10 +370,102 @@ PortalDialog {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB"
   }
 
-  function fileIcon(isDir, name) {
-    if (isDir) return Quickshell.iconPath("folder", true)
-    if (isImagePath(name)) return Quickshell.iconPath("image-x-generic", true)
-    return Quickshell.iconPath("text-x-generic", true)
+  function formatDate(value) {
+    if (value === undefined || value === null || value === "") return ""
+    var date
+    if (value instanceof Date)
+      date = value
+    else if (typeof value === "number")
+      date = value > 1e12 ? new Date(value) : new Date(value * 1000)
+    else
+      date = new Date(value)
+    if (isNaN(date.getTime())) return ""
+    function pad(n) { return n < 10 ? "0" + n : "" + n }
+    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate())
+      + " " + pad(date.getHours()) + ":" + pad(date.getMinutes())
+  }
+
+  function placeGlyph(label, path) {
+    if (String(path) === recentPlace) return "󰋚"
+    switch (String(label)) {
+    case "Home": return "󰋜"
+    case "Downloads": return "󰇚"
+    case "Documents": return "󰈙"
+    case "Pictures": return "󰉏"
+    case "Videos": return "󰎁"
+    case "Music": return "󰎆"
+    case "Projects": return "󰲂"
+    case "Computer": return "󰌢"
+    default: return "󰉋"
+    }
+  }
+
+  function fileGlyph(isDir, name) {
+    if (isDir) return "󰉋"
+    if (isImagePath(name)) return "󰋩"
+    if (isTextPath(name)) return "󰈙"
+    return "󰈔"
+  }
+
+  function placeSelected(path) {
+    if (String(path) === recentPlace) return recentMode
+    if (recentMode) return false
+    var a = String(path).replace(/\/$/, "") || "/"
+    var b = currentPath.replace(/\/$/, "") || "/"
+    return a === b
+  }
+
+  function cycleSort(key) {
+    if (sortKey === key)
+      sortReversed = !sortReversed
+    else {
+      sortKey = key
+      sortReversed = false
+    }
+    applyFolderSort()
+  }
+
+  function applyFolderSort() {
+    if (sortKey === "size")
+      files.sortField = FolderListModel.Size
+    else if (sortKey === "time")
+      files.sortField = FolderListModel.Time
+    else
+      files.sortField = FolderListModel.Name
+    files.sortReversed = sortReversed
+  }
+
+  function sortHeading(label, key) {
+    if (sortKey !== key) return label
+    return label + (sortReversed ? " ↓" : " ↑")
+  }
+
+  function buildRecentRows() {
+    var rows = (recentItems || []).slice()
+    var q = query
+    var hidden = showHidden
+    var key = sortKey
+    var rev = sortReversed
+    rows = rows.filter(function(row) {
+      var name = String(row.label || "")
+      var isDir = row.isDir === true
+      if (!hidden && name.charAt(0) === ".") return false
+      return rowVisible(name, isDir)
+    })
+    rows.sort(function(a, b) {
+      var aDir = a.isDir === true
+      var bDir = b.isDir === true
+      if (aDir !== bDir) return aDir ? -1 : 1
+      var cmp = 0
+      if (key === "size")
+        cmp = Number(a.size || 0) - Number(b.size || 0)
+      else if (key === "time")
+        cmp = Number(a.modified || 0) - Number(b.modified || 0)
+      else
+        cmp = String(a.label || "").toLowerCase().localeCompare(String(b.label || "").toLowerCase())
+      return rev ? -cmp : cmp
+    })
+    return rows
   }
 
   function refreshList() {
@@ -288,6 +476,7 @@ PortalDialog {
   }
 
   function refreshNames() {
+    if (recentMode) return
     lsProc.running = false
     lsProc.running = true
   }
@@ -307,13 +496,58 @@ PortalDialog {
     mkdirProc.running = true
   }
 
+  function choiceHasOptions(choice) {
+    return choice && choice.options && choice.options.length
+  }
+
+  // Same as AccessDialog: QVariant pairs may be objects with "0"/"1" keys.
+  function optionPair(o, index) {
+    if (o === undefined || o === null)
+      return { value: String(index), label: String(index) }
+    if (Array.isArray(o))
+      return { value: String(o[0]), label: String(o[1] || o[0]) }
+    if (typeof o === "object") {
+      if (o.value !== undefined || o.label !== undefined || o.id !== undefined) {
+        var v = o.value !== undefined ? o.value : (o.id !== undefined ? o.id : index)
+        var l = o.label !== undefined ? o.label : v
+        return { value: String(v), label: String(l) }
+      }
+      if (o[0] !== undefined || o["0"] !== undefined) {
+        var pv = o[0] !== undefined ? o[0] : o["0"]
+        var pl = o[1] !== undefined ? o[1] : o["1"]
+        return { value: String(pv), label: String(pl !== undefined ? pl : pv) }
+      }
+    }
+    return { value: String(o), label: String(o) }
+  }
+
+  function choiceOptions(choice) {
+    var out = []
+    var opts = (choice && choice.options) || []
+    for (var i = 0; i < opts.length; i++)
+      out.push(optionPair(opts[i], i))
+    return out
+  }
+
   onAccepted: tryAccept()
-  onFolderChanged: refreshNames()
+  onFolderChanged: {
+    if (!recentMode)
+      refreshNames()
+    if (!pathEditing)
+      syncPathEdits()
+  }
   Component.onCompleted: {
     refreshNames()
+    syncPathEdits()
+    applyFolderSort()
     var initial = {}
-    for (var i = 0; i < choices.length; i++)
-      initial[String(choices[i].id || i)] = String(choices[i].selected || (choices[i].options && choices[i].options.length ? choices[i].options[0][0] : "false"))
+    for (var i = 0; i < choices.length; i++) {
+      var c = choices[i]
+      var fallback = "false"
+      if (c.options && c.options.length)
+        fallback = optionPair(c.options[0], 0).value
+      initial[String(c.id || i)] = String(c.selected || fallback)
+    }
     choiceValues = initial
   }
 
@@ -334,6 +568,7 @@ PortalDialog {
     showDotAndDotDot: false
     showHidden: root.showHidden
     sortField: FolderListModel.Name
+    sortReversed: false
   }
 
   Process {
@@ -397,6 +632,16 @@ PortalDialog {
       }
       return false
     }
+    if (pathEditing && event.key === Qt.Key_Escape) {
+      pathEditing = false
+      syncPathEdits()
+      return true
+    }
+    if (event.key === Qt.Key_L && (event.modifiers & Qt.ControlModifier)) {
+      pathEditing = true
+      pathEdit = recentMode ? recentPlace : currentPath
+      return true
+    }
     if (event.key === Qt.Key_Backspace && !(event.modifiers & Qt.ControlModifier)) {
       goParent()
       return true
@@ -419,42 +664,62 @@ PortalDialog {
 
   ColumnLayout {
     anchors.fill: parent
-    spacing: Style.space(8)
+    spacing: Style.spacing.lg
 
     RowLayout {
       Layout.fillWidth: true
       Layout.fillHeight: true
-      spacing: Style.space(10)
+      spacing: Style.spacing.lg
 
       ListView {
         id: placeList
-        Layout.preferredWidth: Style.space(168)
+        Layout.preferredWidth: root.sidebarWidth
         Layout.fillHeight: true
         clip: true
+        spacing: Style.spacing.xs
         model: root.places
-        delegate: Item {
+        delegate: BorderSurface {
+          id: placeRow
           required property var modelData
           width: placeList.width
-          height: Style.space(30)
-          readonly property bool sel: root.currentPath === String(modelData.path).replace(/\/$/, "") || root.currentPath === String(modelData.path)
-          Rectangle {
+          height: root.rowHeight
+          radius: Style.cornerRadius
+          readonly property bool sel: root.placeSelected(modelData.path)
+          readonly property bool hot: sel || placeHover.containsMouse
+          color: hot ? root.selectedBackground : "transparent"
+          borderSpec: hot ? root.selectedBorderSpec : Border.none()
+
+          Row {
             anchors.fill: parent
-            color: sel ? Style.selectedFillFor(Color.foreground, Color.accent) : "transparent"
-            radius: Style.cornerRadius
+            anchors.leftMargin: Style.spacing.rowPaddingX
+            anchors.rightMargin: Style.spacing.rowPaddingX
+            spacing: Style.spacing.sm
+
             Text {
               anchors.verticalCenter: parent.verticalCenter
-              anchors.left: parent.left
-              anchors.leftMargin: Style.space(8)
-              anchors.right: parent.right
+              text: root.placeGlyph(modelData.label, modelData.path)
+              color: placeRow.hot ? root.selectedText : root.contentText
+              font.family: Style.font.family
+              font.pixelSize: Style.font.icon
+              width: root.iconColWidth
+              horizontalAlignment: Text.AlignHCenter
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              width: parent.width - root.iconColWidth - parent.spacing
               text: String(modelData.label || modelData.path)
-              color: sel ? Color.accent : Color.foreground
+              color: placeRow.hot ? root.selectedText : root.contentText
               font.family: Style.font.family
               font.pixelSize: Style.font.body
               elide: Text.ElideRight
             }
           }
+
           MouseArea {
+            id: placeHover
             anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
             onClicked: root.goTo(modelData.path)
           }
         }
@@ -463,33 +728,79 @@ PortalDialog {
       ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        spacing: Style.space(8)
+        spacing: Style.spacing.sm
 
         RowLayout {
           Layout.fillWidth: true
-          spacing: Style.space(8)
+          Layout.preferredHeight: root.rowHeight
+          spacing: Style.spacing.sm
+
           Button {
-            text: "↑"
+            iconText: "󰁍"
             bordered: true
+            tooltipText: "Parent folder"
+            Layout.preferredHeight: root.rowHeight
             onClicked: root.goParent()
           }
           TextField {
+            visible: root.pathEditing
             Layout.fillWidth: true
-            text: root.currentPath
-            onAccepted: {
-              var p = text
-              if (p.charAt(0) !== "/") p = "/" + p
-              root.goTo(p)
+            Layout.preferredHeight: root.rowHeight
+            text: root.pathEdit
+            onTextChanged: root.pathEdit = text
+            onAccepted: root.commitPathEdit(text)
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Escape) {
+                root.pathEditing = false
+                root.syncPathEdits()
+                event.accepted = true
+              }
+            }
+          }
+          Flickable {
+            visible: !root.pathEditing
+            Layout.fillWidth: true
+            Layout.preferredHeight: root.rowHeight
+            clip: true
+            contentWidth: crumbRow.implicitWidth
+            contentHeight: height
+            boundsBehavior: Flickable.StopAtBounds
+            Row {
+              id: crumbRow
+              height: parent.height
+              spacing: Style.spacing.xs
+              Repeater {
+                model: root.crumbs
+                delegate: Button {
+                  required property int index
+                  required property var modelData
+                  height: crumbRow.height
+                  text: String(modelData.label)
+                  bordered: true
+                  selected: index === root.crumbs.length - 1
+                  onClicked: {
+                    if (index === root.crumbs.length - 1) {
+                      root.pathEditing = true
+                      root.pathEdit = root.recentMode ? root.recentPlace : root.currentPath
+                    } else {
+                      root.goTo(modelData.path)
+                    }
+                  }
+                }
+              }
             }
           }
           TextField {
-            Layout.preferredWidth: Style.space(180)
+            Layout.preferredWidth: Style.space(200)
+            Layout.preferredHeight: root.rowHeight
             placeholderText: "Search"
             onTextChanged: root.query = text
           }
           Button {
             text: "New folder"
             bordered: true
+            enabled: !root.recentMode
+            Layout.preferredHeight: root.rowHeight
             onClicked: {
               root.newFolderName = ""
               root.newFolderError = ""
@@ -500,6 +811,7 @@ PortalDialog {
             text: "Hidden"
             bordered: true
             selected: root.showHidden
+            Layout.preferredHeight: root.rowHeight
             onClicked: root.showHidden = !root.showHidden
           }
         }
@@ -507,111 +819,119 @@ PortalDialog {
         RowLayout {
           Layout.fillWidth: true
           Layout.fillHeight: true
-          spacing: Style.space(8)
+          spacing: Style.spacing.lg
 
-          ListView {
-            id: list
+          ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
-            model: files
-            delegate: Item {
-              width: list.width
-              height: root.rowVisible(fileName, fileIsDir) ? Style.space(34) : 0
-              visible: height > 0
-              property string fileName: model.fileName || ""
-              property bool fileIsDir: model.fileIsDir === true
-              property var fileSize: model.fileSize || 0
-              readonly property string path: String(model.filePath || model.fileURL || "").replace(/^file:\/\//, "")
-              readonly property bool sel: root.selectedPaths.indexOf(path) !== -1
+            spacing: 0
 
-              Rectangle {
-                anchors.fill: parent
-                color: sel ? Style.selectedFillFor(Color.foreground, Color.accent) : "transparent"
-                radius: Style.cornerRadius
+            RowLayout {
+              Layout.fillWidth: true
+              Layout.preferredHeight: root.rowHeight
+              spacing: Style.spacing.sm
 
-                Image {
-                  id: rowIcon
-                  anchors.verticalCenter: parent.verticalCenter
-                  anchors.left: parent.left
-                  anchors.leftMargin: Style.space(8)
-                  width: Style.space(18)
-                  height: Style.space(18)
-                  fillMode: Image.PreserveAspectFit
-                  source: root.fileIcon(fileIsDir, fileName)
-                  asynchronous: true
-                }
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  anchors.left: rowIcon.right
-                  anchors.leftMargin: Style.space(8)
-                  anchors.right: sizeLabel.left
-                  anchors.rightMargin: Style.space(8)
-                  text: fileName
-                  color: sel ? Color.accent : Color.foreground
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
-                  elide: Text.ElideRight
-                }
-
-                Text {
-                  id: sizeLabel
-                  visible: !fileIsDir
-                  anchors.verticalCenter: parent.verticalCenter
-                  anchors.right: parent.right
-                  anchors.rightMargin: Style.space(10)
-                  text: root.formatSize(fileSize)
-                  color: Color.muted
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
+              Item { Layout.preferredWidth: root.iconColWidth }
+              Text {
+                Layout.fillWidth: true
+                text: root.sortHeading("Name", "name")
+                color: root.dimText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.cycleSort("name") }
               }
+              Text {
+                Layout.preferredWidth: root.sizeColWidth
+                horizontalAlignment: Text.AlignRight
+                text: root.sortHeading("Size", "size")
+                color: root.dimText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.cycleSort("size") }
+              }
+              Text {
+                Layout.preferredWidth: root.dateColWidth
+                horizontalAlignment: Text.AlignRight
+                text: root.sortHeading("Modified", "time")
+                color: root.dimText
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.cycleSort("time") }
+              }
+            }
+            PanelSeparator { Layout.fillWidth: true }
 
-              MouseArea {
-                anchors.fill: parent
-                onClicked: root.toggleSelect(path, fileIsDir, fileName)
-                onDoubleClicked: {
-                  if (fileIsDir) {
-                    root.goTo(path)
-                  } else if (root.saveMode) {
-                    root.filename = fileName
-                    root.tryAccept()
-                  } else {
-                    root.selectedPaths = [path]
-                    root.tryAccept()
-                  }
+            ListView {
+              id: list
+              visible: !root.recentMode
+              Layout.fillWidth: true
+              Layout.fillHeight: true
+              clip: true
+              model: files
+              delegate: fileRow
+            }
+            ListView {
+              id: recentList
+              visible: root.recentMode
+              Layout.fillWidth: true
+              Layout.fillHeight: true
+              clip: true
+              model: root.recentRows
+              delegate: Item {
+                width: recentList.width
+                required property var modelData
+                property string fileName: String(modelData.label || "")
+                property bool fileIsDir: modelData.isDir === true
+                property var fileSize: modelData.size || 0
+                property var fileModified: modelData.modified || 0
+                readonly property string path: String(modelData.path || "")
+                readonly property bool sel: root.selectedPaths.indexOf(path) !== -1
+                height: root.rowVisible(fileName, fileIsDir) ? root.rowHeight : 0
+                visible: height > 0
+                FileRowInner {
+                  anchors.fill: parent
+                  fileName: parent.fileName
+                  fileIsDir: parent.fileIsDir
+                  fileSize: parent.fileSize
+                  fileModified: parent.fileModified
+                  path: parent.path
+                  sel: parent.sel
                 }
               }
             }
           }
 
-          Rectangle {
+          BorderSurface {
             visible: root.previewVisible
             Layout.preferredWidth: Style.space(220)
             Layout.fillHeight: true
             color: "transparent"
-            border.color: Color.muted
-            border.width: 1
+            borderSpec: Border.flat(Util.alpha(root.contentText, 0.28), Style.normalBorderWidth)
             radius: Style.cornerRadius
+            padding: Style.space(10)
 
             Column {
               anchors.fill: parent
-              anchors.margins: Style.space(10)
-              spacing: Style.space(8)
+              anchors.topMargin: parent.contentTopInset
+              anchors.rightMargin: parent.contentRightInset
+              anchors.bottomMargin: parent.contentBottomInset
+              anchors.leftMargin: parent.contentLeftInset
+              spacing: Style.spacing.sm
 
               Text {
                 width: parent.width
                 text: root.previewPath.length ? root.previewPath.split("/").pop() : "Preview"
-                color: Color.foreground
+                color: root.contentText
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
                 elide: Text.ElideMiddle
               }
-
               Image {
                 width: parent.width
-                height: Math.min(Style.space(160), parent.height - Style.space(80))
+                height: Math.min(Style.space(160), parent.height - Style.space(72))
                 visible: root.previewIsImage
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
@@ -619,27 +939,16 @@ PortalDialog {
                 sourceSize.width: 400
                 sourceSize.height: 400
               }
-
               Text {
                 width: parent.width
                 visible: root.previewIsText
                 text: root.previewText.length ? root.previewText : "…"
-                color: Color.muted
+                color: root.dimText
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WrapAnywhere
                 maximumLineCount: 14
                 elide: Text.ElideRight
-              }
-
-              Text {
-                width: parent.width
-                visible: !root.previewIsImage && !root.previewIsText
-                text: !root.previewPath.length ? "Select a file to preview" : (root.previewIsDir ? "Folder" : "No preview")
-                color: Color.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                wrapMode: Text.WordWrap
               }
             }
           }
@@ -650,25 +959,62 @@ PortalDialog {
     RowLayout {
       Layout.fillWidth: true
       Layout.preferredHeight: root.footerBarHeight
-      Layout.minimumHeight: root.footerBarHeight
-      Layout.maximumHeight: root.footerBarHeight
-      spacing: Style.space(8)
+      spacing: Style.spacing.md
+      visible: root.choices.length > 0 || root.filters.length > 0
 
-      TextField {
-        Layout.fillWidth: true
-        Layout.fillHeight: true
-        visible: root.saveMode
-        verticalPadding: Style.spacing.controlPaddingY
-        placeholderText: "File name"
-        text: root.filename
-        onTextChanged: root.filename = text
-        onAccepted: root.tryAccept()
+      Repeater {
+        model: root.choices
+        delegate: Row {
+          required property var modelData
+          spacing: Style.spacing.sm
+          height: root.footerBarHeight
+          Text {
+            visible: root.choiceHasOptions(modelData)
+            anchors.verticalCenter: parent.verticalCenter
+            text: String(modelData.label || modelData.id)
+            color: root.contentText
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+          UpDropdown {
+            visible: root.choiceHasOptions(modelData)
+            width: Style.space(160)
+            height: root.footerBarHeight
+            showLabel: false
+            rowHeight: root.footerBarHeight
+            value: String(root.choiceValues[String(modelData.id)] || modelData.selected || "")
+            options: root.choiceOptions(modelData)
+            onChanged: function(v) {
+              var next = Object.assign({}, root.choiceValues)
+              next[String(modelData.id)] = v
+              root.choiceValues = next
+            }
+          }
+          Text {
+            visible: !root.choiceHasOptions(modelData)
+            anchors.verticalCenter: parent.verticalCenter
+            text: String(modelData.label || modelData.id)
+            color: root.contentText
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+          ToggleSwitch {
+            visible: !root.choiceHasOptions(modelData)
+            anchors.verticalCenter: parent.verticalCenter
+            checked: String(root.choiceValues[String(modelData.id)] || modelData.selected) === "true"
+            onToggled: {
+              var next = Object.assign({}, root.choiceValues)
+              next[String(modelData.id)] = checked ? "false" : "true"
+              root.choiceValues = next
+            }
+          }
+        }
       }
 
       UpDropdown {
         visible: root.filters.length > 0
-        Layout.preferredWidth: Style.space(220)
-        Layout.fillHeight: true
+        Layout.preferredWidth: Style.space(200)
+        Layout.preferredHeight: root.footerBarHeight
         showLabel: false
         rowHeight: root.footerBarHeight
         value: String(root.filterIndex)
@@ -681,52 +1027,169 @@ PortalDialog {
         onChanged: function(v) { root.filterIndex = Number(v) }
       }
 
+      Item { Layout.fillWidth: true }
+    }
+
+    RowLayout {
+      Layout.fillWidth: true
+      Layout.preferredHeight: root.footerBarHeight
+      spacing: Style.spacing.sm
+
+      TextField {
+        Layout.fillWidth: true
+        Layout.preferredHeight: root.footerBarHeight
+        visible: root.saveMode
+        placeholderText: "File name"
+        text: root.filename
+        onTextChanged: root.filename = text
+        onAccepted: root.tryAccept()
+      }
       Item {
         Layout.fillWidth: true
         visible: !root.saveMode
       }
-
       Button {
-        Layout.fillHeight: true
-        Layout.preferredHeight: root.footerBarHeight
         text: root.cancelText
         bordered: true
         selected: root.selectedIndex === 0
+        Layout.preferredHeight: root.footerBarHeight
         onClicked: {
           root.selectedIndex = 0
           root.rejected()
         }
       }
       Button {
-        Layout.fillHeight: true
-        Layout.preferredHeight: root.footerBarHeight
         text: root.acceptText
         bordered: true
         selected: root.selectedIndex === 1
         enabled: root.acceptable
+        Layout.preferredHeight: root.footerBarHeight
         onClicked: {
           root.selectedIndex = 1
           if (root.acceptable) root.accepted()
         }
       }
     }
+  }
 
-    Flow {
-      Layout.fillWidth: true
-      spacing: Style.space(8)
-      visible: root.choices.length > 0
-      Repeater {
-        model: root.choices
-        Toggle {
-          required property var modelData
-          label: String(modelData.label || modelData.id)
-          checked: String(root.choiceValues[String(modelData.id)] || modelData.selected) === "true"
-          visible: !(modelData.options && modelData.options.length)
-          onClicked: {
-            var next = Object.assign({}, root.choiceValues)
-            next[String(modelData.id)] = checked ? "false" : "true"
-            root.choiceValues = next
+  Component {
+    id: fileRow
+    Item {
+      width: list.width
+      height: root.rowVisible(fileName, fileIsDir) ? root.rowHeight : 0
+      visible: height > 0
+      property string fileName: model.fileName || ""
+      property bool fileIsDir: model.fileIsDir === true
+      property var fileSize: model.fileSize || 0
+      property var fileModified: model.fileModified
+      readonly property string path: String(model.filePath || model.fileURL || "").replace(/^file:\/\//, "")
+      readonly property bool sel: root.selectedPaths.indexOf(path) !== -1
+      FileRowInner {
+        anchors.fill: parent
+        fileName: parent.fileName
+        fileIsDir: parent.fileIsDir
+        fileSize: parent.fileSize
+        fileModified: parent.fileModified
+        path: parent.path
+        sel: parent.sel
+      }
+    }
+  }
+
+  component FileRowInner: Item {
+    id: row
+    property string fileName: ""
+    property bool fileIsDir: false
+    property var fileSize: 0
+    property var fileModified
+    property string path: ""
+    property bool sel: false
+    readonly property bool isImage: !fileIsDir && root.isImagePath(fileName)
+    readonly property bool hot: sel || rowHover.containsMouse
+    readonly property color rowText: hot ? root.selectedText : root.contentText
+    readonly property color rowDim: hot ? Util.alpha(root.selectedText, 0.7) : root.dimText
+
+    BorderSurface {
+      anchors.fill: parent
+      radius: Style.cornerRadius
+      color: row.hot ? root.selectedBackground : "transparent"
+      borderSpec: row.hot ? root.selectedBorderSpec : Border.none()
+    }
+
+    RowLayout {
+      anchors.fill: parent
+      anchors.leftMargin: Style.spacing.sm
+      anchors.rightMargin: Style.spacing.sm
+      spacing: Style.spacing.sm
+
+      Item {
+        Layout.preferredWidth: root.iconColWidth
+        Layout.preferredHeight: root.iconColWidth
+        Text {
+          anchors.centerIn: parent
+          visible: !row.isImage || thumb.status !== Image.Ready
+          text: root.fileGlyph(row.fileIsDir, row.fileName)
+          color: row.rowText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.icon
+        }
+        Image {
+          id: thumb
+          anchors.fill: parent
+          visible: row.isImage
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          source: row.isImage ? "file://" + row.path : ""
+          sourceSize.width: 48
+          sourceSize.height: 48
+        }
+      }
+      Text {
+        Layout.fillWidth: true
+        text: row.fileName
+        color: row.rowText
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+        elide: Text.ElideRight
+      }
+      Text {
+        Layout.preferredWidth: root.sizeColWidth
+        horizontalAlignment: Text.AlignRight
+        text: row.fileIsDir ? "—" : root.formatSize(row.fileSize)
+        color: row.rowDim
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+      }
+      Text {
+        Layout.preferredWidth: root.dateColWidth
+        horizontalAlignment: Text.AlignRight
+        text: row.fileIsDir ? "—" : root.formatDate(row.fileModified)
+        color: row.rowDim
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+      }
+    }
+
+    MouseArea {
+      id: rowHover
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: root.toggleSelect(row.path, row.fileIsDir, row.fileName)
+      onDoubleClicked: {
+        if (row.fileIsDir) {
+          root.goTo(row.path)
+        } else if (root.saveMode) {
+          root.filename = row.fileName
+          if (root.recentMode) {
+            var parent = String(row.path).replace(/\/[^\/]+$/, "")
+            root.goTo(parent.length ? parent : "/")
+            root.filename = row.fileName
           }
+          root.tryAccept()
+        } else {
+          root.selectedPaths = [row.path]
+          root.tryAccept()
         }
       }
     }
@@ -758,7 +1221,7 @@ PortalDialog {
 
     Rectangle {
       anchors.fill: parent
-      color: Util.alpha(Color.background, 0.7)
+      color: Util.alpha(Color.popups.background, 0.82)
       MouseArea { anchors.fill: parent; onClicked: root.newFolderOpen = false }
     }
 
@@ -767,8 +1230,8 @@ PortalDialog {
       width: Math.min(parent.width - Style.space(32), Style.space(380))
       height: Style.space(190)
       anchors.centerIn: parent
-      color: Color.background
-      borderSpec: Border.flat(Color.accent, Style.normalBorderWidth)
+      color: Color.popups.background
+      borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.popups.border, Color.popups.border, Style.normalBorderWidth)
       padding: Style.space(18)
       radius: Style.cornerRadius
 
@@ -784,7 +1247,7 @@ PortalDialog {
 
         Text {
           text: "New folder"
-          color: Color.foreground
+          color: root.contentText
           font.family: Style.font.family
           font.pixelSize: Style.font.title
         }

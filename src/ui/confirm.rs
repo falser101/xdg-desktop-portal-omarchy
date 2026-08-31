@@ -15,6 +15,8 @@ pub struct AccessRequest {
     pub body: String,
     pub deny_label: String,
     pub grant_label: String,
+    #[serde(default)]
+    pub icon: Option<String>,
     pub choices: Vec<Choice>,
 }
 
@@ -205,19 +207,50 @@ impl eframe::App for PromptUi {
                             req.choices
                                 .iter()
                                 .enumerate()
-                                .map(|(i, c)| (i, c.label.clone(), c.options.is_empty()))
+                                .map(|(i, c)| {
+                                    (
+                                        i,
+                                        c.label.clone(),
+                                        c.options.clone(),
+                                    )
+                                })
                                 .collect::<Vec<_>>(),
                         )
                     } else {
                         None
                     };
                     if let Some(choices) = access_choices {
-                        for (i, label, is_check) in choices {
-                            if is_check {
+                        ui.add_space(8.0);
+                        for (i, label, options) in choices {
+                            if options.is_empty() {
                                 let mut on = app.choice_values[i] == "true";
                                 if ui.checkbox(&mut on, label).changed() {
-                                    app.choice_values[i] = if on { "true" } else { "false" }.into();
+                                    app.choice_values[i] =
+                                        if on { "true" } else { "false" }.into();
                                 }
+                            } else {
+                                ui.horizontal(|ui| {
+                                    ui.label(&label);
+                                    let current = app.choice_values[i].clone();
+                                    egui::ComboBox::from_id_salt(format!("access-choice-{i}"))
+                                        .selected_text(
+                                            options
+                                                .iter()
+                                                .find(|(id, _)| id == &current)
+                                                .map(|(_, l)| l.as_str())
+                                                .unwrap_or(current.as_str()),
+                                        )
+                                        .show_ui(ui, |ui| {
+                                            for (id, opt_label) in &options {
+                                                if ui
+                                                    .selectable_label(current == *id, opt_label)
+                                                    .clicked()
+                                                {
+                                                    app.choice_values[i] = id.clone();
+                                                }
+                                            }
+                                        });
+                                });
                             }
                         }
                     }

@@ -6,7 +6,7 @@ use crate::request::with_request;
 use crate::response::PortalResponse;
 use crate::ui::{FileChooserRequest, FileChooserResult, FileMode};
 use crate::uri::file_uri;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use zbus::zvariant::{ObjectPath, SerializeDict, Type};
 
 pub struct FileChooser(pub PortalCtx);
@@ -17,6 +17,7 @@ struct FileChooserOut {
     uris: Vec<String>,
     choices: Vec<(String, String)>,
     current_filter: Option<(String, Vec<(u32, String)>)>,
+    writable: bool,
 }
 
 #[zbus::interface(name = "org.freedesktop.impl.portal.FileChooser")]
@@ -106,11 +107,10 @@ fn build_request(title: &str, options: Options, mode: FileMode) -> FileChooserRe
         Some(0)
     };
 
+    let current_file = dict::as_path(&options, "current_file");
     let current_folder = dict::as_path(&options, "current_folder")
         .filter(|p| p.exists())
-        .or_else(|| {
-            dict::as_path(&options, "current_file").and_then(|p| p.parent().map(PathBuf::from))
-        })
+        .or_else(|| current_file.as_deref().and_then(parent_dir))
         .filter(|p| p.exists())
         .unwrap_or_else(home_dir);
 
@@ -129,9 +129,23 @@ fn build_request(title: &str, options: Options, mode: FileMode) -> FileChooserRe
         current_filter,
         choices: dict::as_choices(&options, "choices"),
         current_folder,
-        current_name: dict::as_str(&options, "current_name").unwrap_or_default(),
+        current_name: save_current_name(dict::as_str(&options, "current_name"), current_file.as_deref()),
         save_names: dict::as_files(&options, "files"),
     }
+}
+
+fn parent_dir(path: &Path) -> Option<PathBuf> {
+    path.parent().map(Path::to_path_buf)
+}
+
+fn save_current_name(current_name: Option<String>, current_file: Option<&Path>) -> String {
+    if let Some(name) = current_name.filter(|s| !s.is_empty()) {
+        return name;
+    }
+    current_file
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 fn to_out(result: FileChooserResult) -> FileChooserOut {
@@ -139,5 +153,29 @@ fn to_out(result: FileChooserResult) -> FileChooserOut {
         uris: result.paths.iter().filter_map(|p| file_uri(p)).collect(),
         choices: result.choices,
         current_filter: result.current_filter,
+        writable: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn save_name_prefers_current_name() {
+        let name = save_current_name(Some("note.md".into()), Some(Path::new("/tmp/old.txt")));
+        assert_eq!(name, "note.md");
+    }
+
+    #[test]
+    fn save_name_falls_back_to_current_file_basename() {
+        let name = save_current_name(None, Some(Path::new("/home/me/draft.txt")));
+        assert_eq!(name, "draft.txt");
+    }
+
+    #[test]
+    fn save_name_ignores_empty_current_name() {
+        let name = save_current_name(Some(String::new()), Some(Path::new("/tmp/photo.png")));
+        assert_eq!(name, "photo.png");
     }
 }

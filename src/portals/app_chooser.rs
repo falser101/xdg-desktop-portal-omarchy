@@ -24,19 +24,31 @@ impl AppChooser {
         options: Options,
     ) -> PortalResponse<AppChooserOut> {
         tracing::info!(app_id, "AppChooser.ChooseApplication");
+        let content_type = dict::as_str(&options, "content_type");
         let req = AppChooserRequest {
             title: "Open with".into(),
             choices,
             last_choice: dict::as_str(&options, "last_choice"),
-            content_type: dict::as_str(&options, "content_type"),
+            content_type: content_type.clone(),
             uri: dict::as_str(&options, "uri"),
             filename: dict::as_str(&options, "filename"),
         };
         with_request(&self.0.connection, &handle, |token| async move {
             match crate::picker::run(crate::picker::PickerRequest::AppChooser(req), token).await {
-                Some(crate::picker::PickerReply::App { choice }) => {
+                Some(crate::picker::PickerReply::App { choice, remember }) => {
                     let choice = crate::desktop::portal_app_id(&choice);
-                    tracing::info!(%choice, "AppChooser selected");
+                    if remember {
+                        if let Some(mime) = content_type.as_deref().filter(|s| !s.is_empty()) {
+                            if let Err(err) = crate::desktop::set_default_for_mime(mime, &choice) {
+                                tracing::warn!(%mime, %choice, %err, "failed to write mimeapps.list");
+                            } else {
+                                tracing::info!(%mime, %choice, "set default handler in mimeapps.list");
+                            }
+                        } else {
+                            tracing::warn!("remember checked but content_type empty; skip mimeapps");
+                        }
+                    }
+                    tracing::info!(%choice, remember, "AppChooser selected");
                     PortalResponse::Success(AppChooserOut { choice })
                 }
                 _ => PortalResponse::Cancelled,

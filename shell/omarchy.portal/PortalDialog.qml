@@ -26,9 +26,9 @@ BorderSurface {
   height: parent ? parent.height : cardHeight
   implicitWidth: cardWidth
   implicitHeight: cardHeight
-  color: Color.background
+  color: Color.popups.background
   radius: Style.cornerRadius
-  borderSpec: Border.flat(Color.accent, Style.normalBorderWidth)
+  borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.popups.border, Color.popups.border, Style.normalBorderWidth)
   padding: Style.space(18)
 
   function handleKey(event) {
@@ -59,7 +59,7 @@ BorderSurface {
     Text {
       Layout.fillWidth: true
       text: root.title
-      color: Color.foreground
+      color: Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.title
       wrapMode: Text.WordWrap
@@ -69,7 +69,7 @@ BorderSurface {
       Layout.fillWidth: true
       visible: root.subtitle.length > 0
       text: root.subtitle
-      color: Color.muted
+      color: Util.alpha(Color.popups.text, 0.7)
       font.family: Style.font.family
       font.pixelSize: Style.font.body
       wrapMode: Text.WordWrap

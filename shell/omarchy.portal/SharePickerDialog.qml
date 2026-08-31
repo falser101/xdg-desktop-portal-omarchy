@@ -87,16 +87,18 @@ PortalDialog {
         width: list.width
         height: Style.space(36)
         readonly property bool sel: root.selected === modelData.value
-        Rectangle {
+        readonly property bool hot: sel || shareHover.containsMouse
+        BorderSurface {
           anchors.fill: parent
-          color: sel ? Style.selectedFillFor(Color.foreground, Color.accent) : "transparent"
+          color: hot ? Color.menu.selectedBackground : "transparent"
+          borderSpec: hot ? Border.surfaceSpec("menu", "selected-border", Color.menu.selectedBorder, 0) : Border.none()
           radius: Style.cornerRadius
           Text {
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
             anchors.leftMargin: Style.space(10)
             text: modelData.label
-            color: sel ? Color.accent : Color.foreground
+            color: hot ? Color.menu.selectedText : Color.popups.text
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             elide: Text.ElideRight
@@ -104,7 +106,10 @@ PortalDialog {
           }
         }
         MouseArea {
+          id: shareHover
           anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
           onClicked: root.selected = modelData.value
           onDoubleClicked: {
             root.selected = modelData.value

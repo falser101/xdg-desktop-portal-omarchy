@@ -32,6 +32,7 @@ impl Access {
             body: body.to_string(),
             deny_label: dict::as_str(&options, "deny_label").unwrap_or_else(|| "Deny".into()),
             grant_label: dict::as_str(&options, "grant_label").unwrap_or_else(|| "Allow".into()),
+            icon: dict::as_str(&options, "icon"),
             choices: dict::as_choices(&options, "choices"),
         };
         with_request(&self.0.connection, &handle, |token| async move {

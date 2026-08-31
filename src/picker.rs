@@ -31,7 +31,11 @@ pub enum PickerRequest {
 pub enum PickerReply {
     Cancel,
     FileChooser(FileChooserResult),
-    App { choice: String },
+    App {
+        choice: String,
+        #[serde(default)]
+        remember: bool,
+    },
     Access(AccessResult),
     Account(AccountResult),
     Wallpaper { granted: bool },
@@ -47,7 +51,7 @@ pub fn run_blocking(req: PickerRequest) -> PickerReply {
             .map(PickerReply::FileChooser)
             .unwrap_or(PickerReply::Cancel),
         PickerRequest::AppChooser(r) => crate::ui::run_app_chooser(r, token)
-            .map(|choice| PickerReply::App { choice })
+            .map(|(choice, remember)| PickerReply::App { choice, remember })
             .unwrap_or(PickerReply::Cancel),
         PickerRequest::Access(r) => crate::ui::run_access(r, token)
             .map(PickerReply::Access)
@@ -129,16 +133,30 @@ async fn run_via_shell(req: PickerRequest, token: CancellationToken) -> Option<P
             extra.insert("uri".into(), uri.clone().into());
         }
         PickerRequest::FileChooser(r) => {
-            let places: Vec<serde_json::Value> = crate::paths::places()
+            let mut places = vec![serde_json::json!({
+                "label": "Recent",
+                "path": crate::paths::RECENT_PLACE,
+            })];
+            places.extend(crate::paths::places().into_iter().map(|(label, path)| {
+                serde_json::json!({
+                    "label": label,
+                    "path": path.to_string_lossy(),
+                })
+            }));
+            extra.insert("places".into(), serde_json::Value::Array(places));
+            let recent: Vec<serde_json::Value> = crate::paths::recent_files(24)
                 .into_iter()
-                .map(|(label, path)| {
+                .map(|f| {
                     serde_json::json!({
-                        "label": label,
-                        "path": path.to_string_lossy(),
+                        "label": f.label,
+                        "path": f.path.to_string_lossy(),
+                        "isDir": f.is_dir,
+                        "size": f.size,
+                        "modified": f.modified,
                     })
                 })
                 .collect();
-            extra.insert("places".into(), serde_json::Value::Array(places));
+            extra.insert("recent".into(), serde_json::Value::Array(recent));
             let filters: Vec<serde_json::Value> = r
                 .filters
                 .iter()

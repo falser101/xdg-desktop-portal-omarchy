@@ -1,7 +1,7 @@
 use super::{cancelled, run_native};
 use crate::dict::Choice;
 use crate::filters::FileFilter;
-use crate::paths::{gtk_bookmarks, home_dir, unique_path, user_dir};
+use crate::paths::{home_dir, places, recent_files, unique_path, RECENT_PLACE};
 use crate::theme::OmarchyTheme;
 use egui::{Align, Key, Layout, RichText, ScrollArea, Sense};
 use std::path::{Path, PathBuf};
@@ -45,6 +45,13 @@ enum Outcome {
     Cancel,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SortKey {
+    Name,
+    Size,
+    Time,
+}
+
 struct Entry {
     name: String,
     path: PathBuf,
@@ -83,6 +90,9 @@ struct ChooserApp {
     overwrite: Option<PathBuf>,
     choice_values: Vec<String>,
     outcome: Outcome,
+    sort_key: SortKey,
+    sort_reversed: bool,
+    recent_mode: bool,
 }
 
 impl ChooserApp {
@@ -116,14 +126,87 @@ impl ChooserApp {
             overwrite: None,
             choice_values,
             outcome: Outcome::Pending,
+            sort_key: SortKey::Name,
+            sort_reversed: false,
+            recent_mode: false,
         };
         app.refresh();
         app
     }
 
+    fn set_sort(&mut self, key: SortKey) {
+        if self.sort_key == key {
+            self.sort_reversed = !self.sort_reversed;
+        } else {
+            self.sort_key = key;
+            self.sort_reversed = false;
+        }
+        self.apply_sort();
+    }
+
+    fn apply_sort(&mut self) {
+        let key = self.sort_key;
+        let reversed = self.sort_reversed;
+        self.entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => {
+                let mut ord = match key {
+                    SortKey::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                    SortKey::Size => a.size.cmp(&b.size),
+                    SortKey::Time => a.modified.cmp(&b.modified),
+                };
+                if reversed {
+                    ord = ord.reverse();
+                }
+                ord
+            }
+        });
+    }
+
+    fn go_recent(&mut self) {
+        self.recent_mode = true;
+        self.selected.clear();
+        self.refresh();
+    }
+
+    fn go_folder(&mut self, path: PathBuf) {
+        self.recent_mode = false;
+        self.folder = path;
+        self.selected.clear();
+        self.refresh();
+    }
+
     fn refresh(&mut self) {
         self.error = None;
         self.entries.clear();
+        if self.recent_mode {
+            for f in recent_files(24) {
+                if !self.show_hidden && f.label.starts_with('.') {
+                    continue;
+                }
+                if !self.query.is_empty()
+                    && !f.label.to_lowercase().contains(&self.query.to_lowercase())
+                {
+                    continue;
+                }
+                self.entries.push(Entry {
+                    name: f.label,
+                    path: f.path,
+                    is_dir: f.is_dir,
+                    size: f.size,
+                    modified: if f.modified > 0 {
+                        std::time::UNIX_EPOCH
+                            .checked_add(std::time::Duration::from_secs(f.modified as u64))
+                    } else {
+                        None
+                    },
+                });
+            }
+            self.path_edit = RECENT_PLACE.to_string();
+            self.apply_sort();
+            return;
+        }
         let read = match std::fs::read_dir(&self.folder) {
             Ok(rd) => rd,
             Err(err) => {
@@ -164,20 +247,14 @@ impl ChooserApp {
                 modified: meta.and_then(|m| m.modified().ok()),
             });
         }
-        self.entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        });
+        self.apply_sort();
         self.path_edit = self.folder.display().to_string();
         self.selected.retain(|p| p.parent() == Some(self.folder.as_path()));
     }
 
     fn enter(&mut self, path: PathBuf) {
         if path.is_dir() {
-            self.folder = path;
-            self.selected.clear();
-            self.refresh();
+            self.go_folder(path);
         } else if self.req.mode == FileMode::Save {
             if let Some(name) = path.file_name() {
                 self.filename = name.to_string_lossy().into_owned();
@@ -201,10 +278,12 @@ impl ChooserApp {
     }
 
     fn parent(&mut self) {
+        if self.recent_mode {
+            self.go_folder(home_dir());
+            return;
+        }
         if let Some(parent) = self.folder.parent() {
-            self.folder = parent.to_path_buf();
-            self.selected.clear();
-            self.refresh();
+            self.go_folder(parent.to_path_buf());
         }
     }
 
@@ -276,8 +355,7 @@ impl ChooserApp {
             if let Err(err) = std::fs::create_dir(&path) {
                 self.error = Some(err.to_string());
             } else {
-                self.folder = path;
-                self.refresh();
+                self.go_folder(path);
             }
         }
     }
@@ -353,10 +431,14 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
                     .desired_width(ui.available_width() - 220.0),
             );
             if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                let path = PathBuf::from(app.path_edit.trim());
-                if path.is_dir() {
-                    app.folder = path;
-                    app.refresh();
+                let raw = app.path_edit.trim();
+                if raw == RECENT_PLACE {
+                    app.go_recent();
+                } else {
+                    let path = PathBuf::from(raw);
+                    if path.is_dir() {
+                        app.go_folder(path);
+                    }
                 }
             }
             ui.add(
@@ -458,45 +540,33 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
         .show(ctx, |ui| {
             ui.add_space(4.0);
             ui.label(RichText::new("Places").small().color(super::visuals::rgb(theme.muted)));
-            let places = [
-                ("Home", home_dir()),
-                ("Downloads", user_dir("DOWNLOAD", "Downloads")),
-                ("Documents", user_dir("DOCUMENTS", "Documents")),
-                ("Pictures", user_dir("PICTURES", "Pictures")),
-                ("Videos", user_dir("VIDEOS", "Videos")),
-                ("Music", user_dir("MUSIC", "Music")),
-                ("Projects", user_dir("PROJECTS", "Projects")),
-                ("Computer", PathBuf::from("/")),
-            ];
-            for (label, path) in places {
-                let selected = app.folder == path;
-                if ui.selectable_label(selected, label).clicked() {
-                    app.folder = path;
-                    app.selected.clear();
-                    app.refresh();
-                }
+            if ui.selectable_label(app.recent_mode, "Recent").clicked() {
+                app.go_recent();
             }
-            let bookmarks = gtk_bookmarks();
-            if !bookmarks.is_empty() {
-                ui.separator();
-                ui.label(RichText::new("Bookmarks").small().color(super::visuals::rgb(theme.muted)));
-                for (path, label) in bookmarks {
-                    if ui.selectable_label(app.folder == path, label).clicked() {
-                        app.folder = path;
-                        app.selected.clear();
-                        app.refresh();
-                    }
+            for (label, path) in places() {
+                let selected = !app.recent_mode && app.folder == path;
+                if ui.selectable_label(selected, label).clicked() {
+                    app.go_folder(path);
                 }
             }
         });
 
     egui::CentralPanel::default().show(ctx, |ui| {
         let header = ui.horizontal(|ui| {
-            ui.label(RichText::new("Name").strong());
+            let name = sort_heading("Name", app.sort_key == SortKey::Name, app.sort_reversed);
+            if ui.button(RichText::new(name).strong()).clicked() {
+                app.set_sort(SortKey::Name);
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new("Date").strong());
+                let date = sort_heading("Date", app.sort_key == SortKey::Time, app.sort_reversed);
+                if ui.button(RichText::new(date).strong()).clicked() {
+                    app.set_sort(SortKey::Time);
+                }
                 ui.add_space(80.0);
-                ui.label(RichText::new("Size").strong());
+                let size = sort_heading("Size", app.sort_key == SortKey::Size, app.sort_reversed);
+                if ui.button(RichText::new(size).strong()).clicked() {
+                    app.set_sort(SortKey::Size);
+                }
             });
         });
         ui.separator();
@@ -618,6 +688,13 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
     }
 
     let _ = Sense::click();
+}
+
+fn sort_heading(label: &str, active: bool, reversed: bool) -> String {
+    if !active {
+        return label.to_string();
+    }
+    format!("{label} {}", if reversed { "↓" } else { "↑" })
 }
 
 fn format_size(n: u64) -> String {

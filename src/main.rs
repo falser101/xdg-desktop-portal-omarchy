@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "xdg-desktop-portal-omarchy\n  Omarchy backend for xdg-desktop-portal\n\n  --demo file-chooser   Open the file picker without D-Bus\n"
+            "xdg-desktop-portal-omarchy\n  Omarchy backend for xdg-desktop-portal\n\n  --demo file-chooser   Open the file picker without D-Bus\n  --demo app-chooser    Open the app chooser without D-Bus\n  --demo access         Open the access dialog without D-Bus\n"
         );
         return Ok(());
     }
@@ -98,9 +98,37 @@ fn demo(kind: &str) -> anyhow::Result<()> {
                 body: "This is a demo of the Access portal.".into(),
                 deny_label: "Deny".into(),
                 grant_label: "Allow".into(),
-                choices: vec![],
+                icon: Some("dialog-password".into()),
+                choices: vec![
+                    xdg_desktop_portal_omarchy::dict::Choice {
+                        id: "remember".into(),
+                        label: "Remember this decision".into(),
+                        options: vec![],
+                        selected: "false".into(),
+                    },
+                    xdg_desktop_portal_omarchy::dict::Choice {
+                        id: "scope".into(),
+                        label: "Access scope".into(),
+                        options: vec![
+                            ("read".into(), "Read only".into()),
+                            ("write".into(), "Read and write".into()),
+                        ],
+                        selected: "read".into(),
+                    },
+                ],
             };
             println!("{:?}", xdg_desktop_portal_omarchy::ui::run_access(req, token));
+        }
+        "app-chooser" => {
+            let req = xdg_desktop_portal_omarchy::ui::AppChooserRequest {
+                title: "Open with".into(),
+                choices: vec![],
+                last_choice: None,
+                content_type: Some("text/plain".into()),
+                uri: Some("file:///tmp/demo.txt".into()),
+                filename: Some("demo.txt".into()),
+            };
+            println!("{:?}", xdg_desktop_portal_omarchy::ui::run_app_chooser(req, token));
         }
         other => anyhow::bail!("unknown demo {other}"),
     }

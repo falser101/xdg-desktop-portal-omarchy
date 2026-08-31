@@ -50,8 +50,12 @@ Item {
     finishing = false
   }
 
-  function acceptAccess() {
-    finish({ "kind": "Access", "granted": true, "choices": [] })
+  function acceptAccess(choices) {
+    finish({
+      "kind": "Access",
+      "granted": true,
+      "choices": choices || []
+    })
   }
 
   function acceptAccount() {
@@ -67,8 +71,12 @@ Item {
     finish({ "kind": "Wallpaper", "granted": true })
   }
 
-  function acceptApp(choice) {
-    finish({ "kind": "App", "choice": String(choice || "") })
+  function acceptApp(choice, remember) {
+    finish({
+      "kind": "App",
+      "choice": String(choice || ""),
+      "remember": !!remember
+    })
   }
 
   function acceptFiles(paths, choices, currentFilter) {
@@ -108,10 +116,15 @@ Item {
     id: panel
     visible: root.opened
     title: "Omarchy Portal"
-    color: Color.background
+    color: Color.popups.background
     implicitWidth: dialogLoader.item && dialogLoader.item.cardWidth ? dialogLoader.item.cardWidth : 480
     implicitHeight: dialogLoader.item && dialogLoader.item.cardHeight ? dialogLoader.item.cardHeight : 280
     minimumSize: Qt.size(320, 180)
+
+    Rectangle {
+      anchors.fill: parent
+      color: Color.popups.background
+    }
 
     onVisibleChanged: {
       if (!visible && root.opened && !root.finishing)
@@ -150,17 +163,14 @@ Item {
 
   Component {
     id: accessComp
-    PortalDialog {
-      title: String(root.request.title || "Allow access?")
-      subtitle: [root.request.subtitle, root.request.body].filter(function(s) { return s }).join("\n")
-      cancelText: String(root.request.deny_label || "Deny")
-      acceptText: String(root.request.grant_label || "Allow")
-      cardWidth: Style.space(420)
-      cardHeight: Style.space(220)
-      onAccepted: root.acceptAccess()
-      onRejected: root.finish({ "kind": "Cancel" })
-      Keys.onPressed: function(e) { if (handleKey(e)) e.accepted = true }
-      focus: true
+    AccessDialog {
+      request: root.request
+      onDecided: function(granted, choices) {
+        if (granted)
+          root.acceptAccess(choices)
+        else
+          root.finish({ "kind": "Cancel" })
+      }
     }
   }
 
@@ -206,7 +216,7 @@ Item {
     AppChooserDialog {
       request: root.request
       extra: root.extra
-      onChosen: function(choice) { root.acceptApp(choice) }
+      onChosen: function(choice, remember) { root.acceptApp(choice, remember) }
       onRejected: root.finish({ "kind": "Cancel" })
     }
   }

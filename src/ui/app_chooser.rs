@@ -16,7 +16,10 @@ pub struct AppChooserRequest {
     pub filename: Option<String>,
 }
 
-pub fn run_app_chooser(req: AppChooserRequest, token: CancellationToken) -> Option<String> {
+pub fn run_app_chooser(
+    req: AppChooserRequest,
+    token: CancellationToken,
+) -> Option<(String, bool)> {
     let apps = load_apps(&req.choices);
     if apps.is_empty() {
         return None;
@@ -26,6 +29,7 @@ pub fn run_app_chooser(req: AppChooserRequest, token: CancellationToken) -> Opti
         apps,
         selected: None,
         query: String::new(),
+        remember: false,
         done: false,
         accepted: false,
     }));
@@ -45,7 +49,7 @@ pub fn run_app_chooser(req: AppChooserRequest, token: CancellationToken) -> Opti
     let _ = run_native(title, [480.0, 520.0], AppUi { state: ui_state, token });
     let app = state.lock().unwrap();
     if app.accepted {
-        app.selected.clone()
+        app.selected.clone().map(|id| (id, app.remember))
     } else {
         None
     }
@@ -56,6 +60,7 @@ struct Chooser {
     apps: Vec<DesktopApp>,
     selected: Option<String>,
     query: String,
+    remember: bool,
     done: bool,
     accepted: bool,
 }
@@ -103,6 +108,12 @@ impl eframe::App for AppUi {
                         ui.label(RichText::new(name).color(super::visuals::rgb(theme.muted)));
                     } else if let Some(ct) = &app.req.content_type {
                         ui.label(RichText::new(ct).color(super::visuals::rgb(theme.muted)));
+                    }
+                    if let Some(ct) = app.req.content_type.clone() {
+                        ui.checkbox(
+                            &mut app.remember,
+                            format!("Set as default app to open {ct} files"),
+                        );
                     }
                     ui.add(
                         egui::TextEdit::singleline(&mut app.query)

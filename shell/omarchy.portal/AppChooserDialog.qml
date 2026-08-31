@@ -10,17 +10,18 @@ PortalDialog {
   property var request: ({})
   property var extra: ({})
 
-  signal chosen(string choice)
+  signal chosen(string choice, bool remember)
 
   title: String(request.title || "Open with")
   subtitle: String(request.uri || request.filename || request.content_type || "")
   acceptText: "Open"
   acceptable: selectedId.length > 0
   cardWidth: Style.space(480)
-  cardHeight: Style.space(520)
+  cardHeight: Style.space(560)
   focus: true
 
   property string query: ""
+  property bool remember: false
   property string selectedId: {
     var last = String(request.last_choice || "")
     var apps = extra.apps || []
@@ -30,6 +31,8 @@ PortalDialog {
     return apps.length ? String(apps[0].id) : ""
   }
   readonly property string lastChoice: String(request.last_choice || "")
+  readonly property string contentType: String(request.content_type || "")
+  readonly property bool canRemember: contentType.length > 0
 
   function filteredApps() {
     var apps = extra.apps || []
@@ -46,15 +49,21 @@ PortalDialog {
 
   function iconSource(icon) {
     var value = String(icon || "")
-    if (value.length === 0) return Quickshell.iconPath("application-x-executable", true)
+    // Rust often resolves to an absolute path (hicolor/Papirus/pixmaps) so we
+    // are not stuck with breeze-dark missing third-party app icons.
     if (value.indexOf("file://") === 0 || value.indexOf("image://") === 0) return value
     if (value.charAt(0) === "/") return "file://" + value
+    if (value.length === 0) return Quickshell.iconPath("application-x-executable", true)
     var themed = Quickshell.iconPath(value, true)
     if (themed && themed.length) return themed
     return Quickshell.iconPath("application-x-executable", true)
   }
 
-  onAccepted: if (selectedId) root.chosen(selectedId)
+  function fallbackIcon() {
+    return Quickshell.iconPath("application-x-executable", true)
+  }
+
+  onAccepted: if (selectedId) root.chosen(selectedId, root.remember && root.canRemember)
 
   Keys.onPressed: function(e) {
     if (handleKey(e)) { e.accepted = true; return }
@@ -63,6 +72,50 @@ PortalDialog {
   ColumnLayout {
     anchors.fill: parent
     spacing: Style.space(8)
+
+    RowLayout {
+      Layout.fillWidth: true
+      spacing: Style.space(8)
+      visible: root.canRemember
+
+      Rectangle {
+        width: Style.space(16)
+        height: Style.space(16)
+        radius: Style.space(3)
+        color: root.remember ? Color.menu.selectedBackground : Util.alpha(Color.popups.text, 0.12)
+        border.width: 1
+        border.color: Util.alpha(Color.popups.text, root.remember ? 0.55 : 0.28)
+
+        Text {
+          anchors.centerIn: parent
+          visible: root.remember
+          text: "✓"
+          color: Color.menu.selectedText
+          font.pixelSize: Style.font.caption || Style.font.body
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.remember = !root.remember
+        }
+      }
+
+      Text {
+        Layout.fillWidth: true
+        text: "Set as default app to open " + root.contentType + " files"
+        color: Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+        wrapMode: Text.WordWrap
+
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.remember = !root.remember
+        }
+      }
+    }
 
     TextField {
       Layout.fillWidth: true
@@ -84,10 +137,12 @@ PortalDialog {
         height: Style.space(40)
         readonly property bool sel: String(modelData.id) === root.selectedId
         readonly property bool isDefault: String(modelData.id) === root.lastChoice && root.lastChoice.length > 0
+        readonly property bool hot: sel || appHover.containsMouse
 
-        Rectangle {
+        BorderSurface {
           anchors.fill: parent
-          color: sel ? Style.selectedFillFor(Color.foreground, Color.accent) : "transparent"
+          color: hot ? Color.menu.selectedBackground : "transparent"
+          borderSpec: hot ? Border.surfaceSpec("menu", "selected-border", Color.menu.selectedBorder, 0) : Border.none()
           radius: Style.cornerRadius
 
           Row {
@@ -99,6 +154,7 @@ PortalDialog {
             spacing: Style.space(10)
 
             Image {
+              id: appIcon
               width: Style.space(22)
               height: Style.space(22)
               fillMode: Image.PreserveAspectFit
@@ -106,12 +162,18 @@ PortalDialog {
               sourceSize.height: height * Screen.devicePixelRatio
               source: root.iconSource(modelData.icon)
               asynchronous: true
+              onStatusChanged: {
+                if (status === Image.Error) {
+                  var fb = root.fallbackIcon()
+                  if (source !== fb) source = fb
+                }
+              }
             }
 
             Text {
               width: parent.width - Style.space(80)
               text: String(modelData.name || modelData.id)
-              color: sel ? Color.accent : Color.foreground
+              color: hot ? Color.menu.selectedText : Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body
               elide: Text.ElideRight
@@ -121,7 +183,7 @@ PortalDialog {
             Text {
               visible: isDefault
               text: "Default"
-              color: Color.muted
+              color: hot ? Util.alpha(Color.menu.selectedText, 0.7) : Util.alpha(Color.popups.text, 0.72)
               font.family: Style.font.family
               font.pixelSize: Style.font.caption || Style.font.body
               anchors.verticalCenter: parent.verticalCenter
@@ -130,11 +192,14 @@ PortalDialog {
         }
 
         MouseArea {
+          id: appHover
           anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
           onClicked: root.selectedId = String(modelData.id)
           onDoubleClicked: {
             root.selectedId = String(modelData.id)
-            root.chosen(root.selectedId)
+            root.chosen(root.selectedId, root.remember && root.canRemember)
           }
         }
       }
