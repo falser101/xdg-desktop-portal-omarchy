@@ -47,7 +47,7 @@
 | Screenshot | 已实现 | [portals/Screenshot.md](portals/Screenshot.md) |
 | Background | 已实现 | [portals/Background.md](portals/Background.md) |
 | DynamicLauncher | 已实现 | [portals/DynamicLauncher.md](portals/DynamicLauncher.md) |
-| ScreenCast | 委托 + 自研选择器 | [portals/ScreenCast.md](portals/ScreenCast.md) |
+| ScreenCast | 委托 + 预览选择器（grim 缩略图） | [portals/ScreenCast.md](portals/ScreenCast.md) |
 | GlobalShortcuts | 委托 | [portals/GlobalShortcuts.md](portals/GlobalShortcuts.md) |
 | InputCapture | 委托 | [portals/InputCapture.md](portals/InputCapture.md) |
 | Secret | 委托 | [portals/Secret.md](portals/Secret.md) |

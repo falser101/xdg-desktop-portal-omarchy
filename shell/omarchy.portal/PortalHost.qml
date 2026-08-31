@@ -88,8 +88,12 @@ Item {
     })
   }
 
-  function acceptShare(selectionLine) {
-    finish({ "kind": "Share", "selection": String(selectionLine || "") })
+  function acceptShare(selectionLine, allowToken) {
+    finish({
+      "kind": "Share",
+      "selection": String(selectionLine || ""),
+      "allowToken": allowToken === true
+    })
   }
 
   function acceptConfirm() {
@@ -260,7 +264,7 @@ Item {
     id: shareComp
     SharePickerDialog {
       extra: root.extra
-      onPicked: function(line) { root.acceptShare(line) }
+      onPicked: function(line, allowToken) { root.acceptShare(line, allowToken) }
       onRejected: root.finish({ "kind": "Cancel" })
     }
   }

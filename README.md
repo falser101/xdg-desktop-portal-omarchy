@@ -31,7 +31,7 @@ FileChooser, and the rest of the GTK half are this backend.
 | Background | done | [docs/portals/Background.md](docs/portals/Background.md) |
 | DynamicLauncher | done | [docs/portals/DynamicLauncher.md](docs/portals/DynamicLauncher.md) |
 | Lockdown | stub | [docs/portals/Lockdown.md](docs/portals/Lockdown.md) |
-| ScreenCast | delegated | [docs/portals/ScreenCast.md](docs/portals/ScreenCast.md) |
+| ScreenCast | delegated | [docs/portals/ScreenCast.md](docs/portals/ScreenCast.md) — hyprland capture + Omarchy preview picker |
 | GlobalShortcuts | delegated | [docs/portals/GlobalShortcuts.md](docs/portals/GlobalShortcuts.md) |
 | InputCapture | delegated | [docs/portals/InputCapture.md](docs/portals/InputCapture.md) |
 | Secret | delegated | [docs/portals/Secret.md](docs/portals/Secret.md) |

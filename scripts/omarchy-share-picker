@@ -5,15 +5,31 @@ set -euo pipefail
 tmp=$(mktemp -d /tmp/omarchy-share-XXXXXX)
 reply="$tmp/reply.json"
 done="$tmp/done"
+preview="$tmp/preview"
+mkdir -p "$preview"
 allow=false
 for a in "$@"; do
   [[ $a == --allow-token ]] && allow=true
 done
 
-payload=$(python3 - "$reply" "$done" "$allow" <<'PY'
-import json, os, sys
+payload=$(PREVIEW_DIR="$preview" python3 - "$reply" "$done" "$allow" <<'PY'
+import json
+import os
+import re
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 reply, done, allow = sys.argv[1], sys.argv[2], sys.argv[3] == "true"
+preview_dir = os.environ["PREVIEW_DIR"]
+
+
+def run_json(args):
+    try:
+        out = subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL)
+        return json.loads(out)
+    except Exception:
+        return []
 
 
 def parse_windows(env: str):
@@ -27,26 +43,172 @@ def parse_windows(env: str):
         addr_sep = rolling.find("[HA>]")
         if min(id_sep, class_sep, title_sep, addr_sep) < 0:
             break
-        out.append({
-            "id": rolling[:id_sep],
-            "class": rolling[id_sep + 5:class_sep],
-            "title": rolling[class_sep + 5:title_sep],
-            "address": rolling[title_sep + 5:addr_sep],
-        })
-        rolling = rolling[addr_sep + 5:]
+        out.append(
+            {
+                "id": rolling[:id_sep],
+                "class": rolling[id_sep + 5 : class_sep],
+                "title": rolling[class_sep + 5 : title_sep],
+                "address": rolling[title_sep + 5 : addr_sep],
+            }
+        )
+        rolling = rolling[addr_sep + 5 :]
     return out
 
 
-print(json.dumps({
-    "kind": "Share",
-    "request": {},
-    "extra": {
-        "allowToken": allow,
-        "windows": parse_windows(os.environ.get("XDPH_WINDOW_SHARING_LIST", "")),
-    },
-    "replyFile": reply,
-    "doneFile": done,
-}))
+def norm_addr(addr: str) -> str:
+    a = (addr or "").strip().lower()
+    if a.startswith("0x"):
+        a = a[2:]
+    return a.lstrip("0") or "0"
+
+
+def client_index(clients):
+    by = {}
+    for c in clients:
+        addr = str(c.get("address") or "")
+        by[norm_addr(addr)] = c
+        by[addr.lower()] = c
+    return by
+
+
+def logical_size(mon):
+    scale = float(mon.get("scale") or 1) or 1.0
+    w = int(mon.get("width") or 0)
+    h = int(mon.get("height") or 0)
+    tw = int(w / scale)
+    th = int(h / scale)
+    transform = int(mon.get("transform") or 0)
+    if transform in (1, 3):
+        return th, tw
+    return tw, th
+
+
+def build_screens(monitors):
+    screens = []
+    for mon in monitors:
+        name = str(mon.get("name") or "")
+        if not name:
+            continue
+        path = os.path.join(preview_dir, f"screen-{name}.png")
+        screens.append(
+            {
+                "name": name,
+                "label": name,
+                "value": f"screen:{name}",
+                "preview": path,
+                "width": mon.get("width"),
+                "height": mon.get("height"),
+            }
+        )
+    return screens
+
+
+def build_windows(raw_windows, clients):
+    by = client_index(clients)
+    out = []
+    for w in raw_windows:
+        c = by.get(norm_addr(w.get("address", ""))) or by.get(str(w.get("address") or "").lower())
+        title = str((c or {}).get("title") or w.get("title") or "")
+        klass = str((c or {}).get("class") or w.get("class") or "")
+        if title == "Omarchy Portal":
+            continue
+        if c is not None:
+            if c.get("mapped") is False or c.get("hidden") is True:
+                continue
+            at = c.get("at") or [0, 0]
+            size = c.get("size") or [0, 0]
+            try:
+                x, y = int(at[0]), int(at[1])
+                ww, hh = int(size[0]), int(size[1])
+            except Exception:
+                continue
+            if ww <= 0 or hh <= 0:
+                continue
+            geometry = f"{x},{y} {ww}x{hh}"
+        else:
+            geometry = ""
+        wid = str(w.get("id") or "")
+        label = klass or "Window"
+        if title:
+            label = f"{klass}: {title}" if klass else title
+        path = os.path.join(preview_dir, f"win-{wid}.png")
+        out.append(
+            {
+                "id": wid,
+                "className": klass,
+                "title": title,
+                "address": w.get("address") or "",
+                "geometry": geometry,
+                "label": label,
+                "value": f"window:{wid}",
+                "preview": path,
+            }
+        )
+    return out
+
+
+def capture(screens, windows):
+    jobs = []
+    for s in screens:
+        jobs.append(("screen", s["name"], s["preview"], None))
+    for w in windows:
+        geo = w.get("geometry") or ""
+        if geo:
+            jobs.append(("window", w["id"], w["preview"], geo))
+
+    def one(job):
+        kind, key, path, geo = job
+        try:
+            if kind == "screen":
+                subprocess.run(
+                    ["grim", "-o", key, path],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                subprocess.run(
+                    ["grim", "-g", geo, path],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+        except Exception:
+            pass
+        return path
+
+    if not jobs:
+        return
+    workers = min(4, len(jobs))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(as_completed([pool.submit(one, j) for j in jobs]))
+
+
+monitors = run_json(["hyprctl", "-j", "monitors"])
+clients = run_json(["hyprctl", "-j", "clients"])
+screens = build_screens(monitors if isinstance(monitors, list) else [])
+windows = build_windows(
+    parse_windows(os.environ.get("XDPH_WINDOW_SHARING_LIST", "")),
+    clients if isinstance(clients, list) else [],
+)
+capture(screens, windows)
+
+print(
+    json.dumps(
+        {
+            "kind": "Share",
+            "request": {},
+            "extra": {
+                "allowToken": allow,
+                "previewDir": preview_dir,
+                "screens": screens,
+                "windows": windows,
+            },
+            "replyFile": reply,
+            "doneFile": done,
+        }
+    )
+)
 PY
 )
 
@@ -59,17 +221,29 @@ if ! omarchy-shell shell summon omarchy-portal "$payload" >/dev/null; then
 fi
 
 selection=""
+allow_token="$allow"
 for _ in $(seq 1 6000); do
   if [[ -f $done ]]; then
-    selection=$(python3 - "$reply" <<'PY'
+    mapfile -t _reply_lines < <(python3 - "$reply" "$allow" <<'PY'
 import json, sys
+path, default_allow = sys.argv[1], sys.argv[2]
 try:
-    data = json.load(open(sys.argv[1]))
+    data = json.load(open(path))
 except Exception:
     data = {}
-print(data.get("selection") or "[SELECTION]/")
+selection = data.get("selection") or "[SELECTION]/"
+allow = data.get("allowToken")
+if allow is None:
+    allow = default_allow == "true"
+else:
+    allow = bool(allow)
+# two lines: selection, then allow true/false
+print(str(selection).replace("\n", " "))
+print("true" if allow else "false")
 PY
 )
+    selection="${_reply_lines[0]:-}"
+    allow_token="${_reply_lines[1]:-$allow}"
     break
   fi
   sleep 0.05
@@ -80,16 +254,66 @@ if [[ -z ${selection} ]]; then
   exit 1
 fi
 
+token=""
+[[ $allow_token == true ]] && token=r
+
 if [[ $selection == REGION_PICK ]]; then
-  # Give the floating dialog a moment to close before slurp grabs the screen.
-  sleep 0.15
-  region=$(slurp -f '%o@%X,%Y,%W,%H' 2>/dev/null || true)
+  # Dialog must close before freeze/slurp; omarchy-capture-region freezes the screen.
+  sleep 0.2
+  target=$(omarchy-capture-region smart --match-monitor 2>/dev/null || true)
+  if [[ -z $target ]]; then
+    echo "[SELECTION]/"
+    exit 1
+  fi
+  if [[ $target == monitor:* ]]; then
+    echo "[SELECTION]${token}/screen:${target#monitor:}"
+    exit 0
+  fi
+  region=$(python3 - "$target" <<'PY'
+import json, re, subprocess, sys
+
+geo = sys.argv[1].strip()
+m = re.match(r"^(-?\d+),(-?\d+)\s+(\d+)x(\d+)$", geo)
+if not m:
+    raise SystemExit(0)
+x, y, w, h = map(int, m.groups())
+try:
+    monitors = json.loads(subprocess.check_output(["hyprctl", "-j", "monitors"], text=True))
+except Exception:
+    monitors = []
+
+def logical_size(mon):
+    scale = float(mon.get("scale") or 1) or 1.0
+    width = int(mon.get("width") or 0)
+    height = int(mon.get("height") or 0)
+    tw, th = int(width / scale), int(height / scale)
+    if int(mon.get("transform") or 0) in (1, 3):
+        return th, tw
+    return tw, th
+
+cx, cy = x + w // 2, y + h // 2
+chosen = None
+for mon in monitors:
+    mx = int(mon.get("x") or 0)
+    my = int(mon.get("y") or 0)
+    mw, mh = logical_size(mon)
+    if mx <= cx < mx + mw and my <= cy < my + mh:
+        chosen = mon
+        break
+if chosen is None and monitors:
+    chosen = monitors[0]
+if not chosen:
+    raise SystemExit(0)
+mx = int(chosen.get("x") or 0)
+my = int(chosen.get("y") or 0)
+name = str(chosen.get("name") or "")
+print(f"{name}@{x - mx},{y - my},{w},{h}")
+PY
+)
   if [[ -z $region ]]; then
     echo "[SELECTION]/"
     exit 1
   fi
-  token=""
-  [[ $allow == true ]] && token=r
   echo "[SELECTION]${token}/region:${region}"
   exit 0
 fi
