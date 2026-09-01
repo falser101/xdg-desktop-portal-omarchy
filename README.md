@@ -32,7 +32,7 @@ this backend.
 | Email | done | [Email](docs/portals/Email.md) |
 | Wallpaper | done | [Wallpaper](docs/portals/Wallpaper.md) |
 | Screenshot | done | [Screenshot](docs/portals/Screenshot.md) |
-| Background | done | [Background](docs/portals/Background.md) |
+| Background | done (Allow / Allow once / Forbid) | [Background](docs/portals/Background.md) |
 | DynamicLauncher | done | [DynamicLauncher](docs/portals/DynamicLauncher.md) |
 | Lockdown | stub | [Lockdown](docs/portals/Lockdown.md) |
 | ScreenCast | delegated + Omarchy picker | [ScreenCast](docs/portals/ScreenCast.en.md) · [中文](docs/portals/ScreenCast.md) |

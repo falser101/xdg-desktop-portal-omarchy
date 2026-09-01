@@ -30,7 +30,7 @@ Access 等交互对话框由本仓库实现。
 | Email | 已实现 | [Email](docs/portals/Email.md) |
 | Wallpaper | 已实现 | [Wallpaper](docs/portals/Wallpaper.md) |
 | Screenshot | 已实现 | [Screenshot](docs/portals/Screenshot.md) |
-| Background | 已实现 | [Background](docs/portals/Background.md) |
+| Background | 已实现（Allow / Allow once / Forbid） | [Background](docs/portals/Background.md) |
 | DynamicLauncher | 已实现 | [DynamicLauncher](docs/portals/DynamicLauncher.md) |
 | Lockdown | 桩 | [Lockdown](docs/portals/Lockdown.md) |
 | ScreenCast | 委托采集 + Omarchy 选择器 | [ScreenCast 中文](docs/portals/ScreenCast.md) · [EN](docs/portals/ScreenCast.en.md) |

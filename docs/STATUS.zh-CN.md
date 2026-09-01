@@ -48,7 +48,7 @@
 | Wallpaper | 已实现 | [portals/Wallpaper.md](portals/Wallpaper.md) |
 | Lockdown | 桩 | [portals/Lockdown.md](portals/Lockdown.md) |
 | Screenshot | 已实现 | [portals/Screenshot.md](portals/Screenshot.md) |
-| Background | 已实现 | [portals/Background.md](portals/Background.md) |
+| Background | 已实现（Allow/Allow once/Forbid + 状态信号） | [portals/Background.md](portals/Background.md) |
 | DynamicLauncher | 已实现 | [portals/DynamicLauncher.md](portals/DynamicLauncher.md) |
 | ScreenCast | 委托采集 + Omarchy 预览选择器 | [ScreenCast.md](portals/ScreenCast.md) · [EN](portals/ScreenCast.en.md) |
 | GlobalShortcuts | 委托 | [portals/GlobalShortcuts.md](portals/GlobalShortcuts.md) |

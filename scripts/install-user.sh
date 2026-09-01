@@ -92,7 +92,7 @@ if [[ -f $HYPR ]] && ! grep -Fq 'Omarchy Portal' "$HYPR"; then
   cat >>"$HYPR" <<'EOF'
 
 -- Portal dialogs: opaque popup surface so dark-theme text stays readable
-o.window({ class = "^org.quickshell$", title = "^Omarchy Portal$" }, { tag = "-default-opacity", opacity = "1 1" })
+o.window({ class = "^org.quickshell$", title = "^(Omarchy Portal|User Information Requested|Background Activity|Launcher Requested)$" }, { float = true, center = true, tag = "-default-opacity", opacity = "1 1" })
 o.window("xdg-desktop-portal-omarchy", { tag = "-default-opacity +floating-window", opacity = "1 1" })
 EOF
 fi

@@ -81,9 +81,35 @@ pub fn run_confirm(title: String, subtitle: String, accept: String, token: Cance
     )
 }
 
+/// Background portal: 0 Forbid, 1 Allow, 2 Allow once. `None` if cancelled hard.
+pub fn run_background(
+    title: String,
+    subtitle: String,
+    body: String,
+    token: CancellationToken,
+) -> Option<u32> {
+    run_prompt(
+        PromptKind::Background {
+            title,
+            subtitle,
+            body,
+        },
+        token,
+    )
+    .and_then(|r| match r {
+        PromptResult::Background(n) => Some(n),
+        _ => None,
+    })
+}
+
 enum PromptKind {
     Access(AccessRequest),
     Account(AccountRequest),
+    Background {
+        title: String,
+        subtitle: String,
+        body: String,
+    },
     Wallpaper { uri: String },
     Confirm {
         title: String,
@@ -95,6 +121,7 @@ enum PromptKind {
 enum PromptResult {
     Access(AccessResult),
     Account(AccountResult),
+    Background(u32),
     Granted,
 }
 
@@ -102,12 +129,14 @@ struct PromptApp {
     kind: PromptKind,
     choice_values: Vec<String>,
     accepted: Option<bool>,
+    background_result: Option<u32>,
 }
 
 fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult> {
     let title = match &kind {
         PromptKind::Access(r) => r.title.clone(),
         PromptKind::Account(r) => r.title.clone(),
+        PromptKind::Background { title, .. } => title.clone(),
         PromptKind::Wallpaper { .. } => "Set wallpaper".into(),
         PromptKind::Confirm { title, .. } => title.clone(),
     };
@@ -117,12 +146,14 @@ fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult
     };
     let size = match &kind {
         PromptKind::Account(_) => [440.0, 460.0],
+        PromptKind::Background { .. } => [460.0, 280.0],
         _ => [520.0, 280.0],
     };
     let state = Arc::new(Mutex::new(PromptApp {
         kind,
         choice_values,
         accepted: None,
+        background_result: None,
     }));
     let ui_state = Arc::clone(&state);
     let _ = run_native(
@@ -135,6 +166,9 @@ fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult
         },
     );
     let app = state.lock().unwrap();
+    if let (Some(result), PromptKind::Background { .. }) = (app.background_result, &app.kind) {
+        return Some(PromptResult::Background(result));
+    }
     match (app.accepted, &app.kind) {
         (Some(true), PromptKind::Access(req)) => Some(PromptResult::Access(AccessResult {
             granted: true,
@@ -219,7 +253,7 @@ impl eframe::App for PromptUi {
         }
         {
             let mut app = self.state.lock().unwrap();
-            if app.accepted.is_some() {
+            if app.accepted.is_some() || app.background_result.is_some() {
                 close = true;
             } else {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -233,6 +267,22 @@ impl eframe::App for PromptUi {
                             if !req.body.is_empty() {
                                 ui.add_space(8.0);
                                 ui.label(&req.body);
+                            }
+                        }
+                        PromptKind::Background {
+                            title,
+                            subtitle,
+                            body,
+                        } => {
+                            ui.label(RichText::new(title).size(18.0).strong());
+                            if !subtitle.is_empty() {
+                                ui.label(
+                                    RichText::new(subtitle).color(super::visuals::rgb(theme.muted)),
+                                );
+                            }
+                            if !body.is_empty() {
+                                ui.add_space(8.0);
+                                ui.label(body);
                             }
                         }
                         PromptKind::Account(req) => {
@@ -338,22 +388,49 @@ impl eframe::App for PromptUi {
                         }
                     }
                     ui.add_space(16.0);
-                    let (deny, grant) = match &app.kind {
-                        PromptKind::Access(req) => (req.deny_label.clone(), req.grant_label.clone()),
-                        PromptKind::Account(_) => ("Cancel".into(), "Share".into()),
-                        PromptKind::Confirm { accept, .. } => ("Cancel".into(), accept.clone()),
-                        _ => ("Cancel".into(), "Allow".into()),
-                    };
-                    ui.horizontal(|ui| {
-                        if ui.button(deny).clicked() {
-                            app.accepted = Some(false);
-                        }
-                        if ui.button(RichText::new(grant).strong()).clicked() {
-                            app.accepted = Some(true);
-                        }
-                    });
+                    if matches!(app.kind, PromptKind::Background { .. }) {
+                        ui.add_space(16.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Deny").clicked() {
+                                app.background_result = Some(0);
+                            }
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.button(RichText::new("Allow").strong()).clicked() {
+                                    app.background_result = Some(1);
+                                }
+                                if ui.button("Allow once").clicked() {
+                                    app.background_result = Some(2);
+                                }
+                            });
+                        });
+                    } else {
+                        let (deny, grant) = match &app.kind {
+                            PromptKind::Access(req) => {
+                                (req.deny_label.clone(), req.grant_label.clone())
+                            }
+                            PromptKind::Account(_) => ("Cancel".into(), "Share".into()),
+                            PromptKind::Confirm { accept, .. } => {
+                                ("Cancel".into(), accept.clone())
+                            }
+                            _ => ("Cancel".into(), "Allow".into()),
+                        };
+                        ui.horizontal(|ui| {
+                            if ui.button(deny).clicked() {
+                                app.accepted = Some(false);
+                            }
+                            if ui.button(RichText::new(grant).strong()).clicked() {
+                                app.accepted = Some(true);
+                            }
+                        });
+                    }
                 });
-                if escape {
+                if matches!(app.kind, PromptKind::Background { .. }) {
+                    if escape {
+                        app.background_result = Some(2);
+                    } else if enter {
+                        app.background_result = Some(1);
+                    }
+                } else if escape {
                     app.accepted = Some(false);
                 } else if enter {
                     app.accepted = Some(true);

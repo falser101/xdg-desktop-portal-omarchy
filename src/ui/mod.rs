@@ -5,8 +5,8 @@ mod visuals;
 
 pub use app_chooser::{run_app_chooser, AppChooserRequest};
 pub use confirm::{
-    run_access, run_account, run_confirm, run_wallpaper_confirm, AccessRequest, AccessResult,
-    AccountRequest, AccountResult,
+    run_access, run_account, run_background, run_confirm, run_wallpaper_confirm, AccessRequest,
+    AccessResult, AccountRequest, AccountResult,
 };
 pub use file_chooser::{run_file_chooser, FileChooserRequest, FileChooserResult, FileMode};
 

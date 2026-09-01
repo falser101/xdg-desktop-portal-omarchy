@@ -1,5 +1,6 @@
 use super::PortalCtx;
 use crate::dict::{self, Options};
+use crate::documents::{self, Entity};
 use crate::filters::FileFilter;
 use crate::paths::home_dir;
 use crate::request::with_request;
@@ -8,6 +9,7 @@ use crate::ui::{FileChooserRequest, FileChooserResult, FileMode};
 use crate::uri::file_uri;
 use std::path::{Path, PathBuf};
 use zbus::zvariant::{ObjectPath, SerializeDict, Type};
+use zbus::Connection;
 
 pub struct FileChooser(pub PortalCtx);
 
@@ -67,7 +69,7 @@ impl FileChooser {
         options: Options,
         mode: FileMode,
     ) -> PortalResponse<FileChooserOut> {
-        let req = build_request(title, options, mode);
+        let req = build_request(&self.0.connection, title, options, mode).await;
         with_request(&self.0.connection, &handle, |token| async move {
             match crate::picker::run(crate::picker::PickerRequest::FileChooser(req), token).await {
                 Some(crate::picker::PickerReply::FileChooser(result)) => {
@@ -85,7 +87,12 @@ impl FileChooser {
     }
 }
 
-fn build_request(title: &str, options: Options, mode: FileMode) -> FileChooserRequest {
+async fn build_request(
+    conn: &Connection,
+    title: &str,
+    options: Options,
+    mode: FileMode,
+) -> FileChooserRequest {
     let filters_raw = dict::as_filters(&options, "filters");
     let mut filters: Vec<FileFilter> = filters_raw
         .into_iter()
@@ -107,12 +114,31 @@ fn build_request(title: &str, options: Options, mode: FileMode) -> FileChooserRe
         Some(0)
     };
 
-    let current_file = dict::as_path(&options, "current_file");
-    let current_folder = dict::as_path(&options, "current_folder")
-        .filter(|p| p.exists())
-        .or_else(|| current_file.as_deref().and_then(parent_dir))
-        .filter(|p| p.exists())
-        .unwrap_or_else(home_dir);
+    let raw_file = dict::as_path(&options, "current_file");
+    let raw_folder = dict::as_path(&options, "current_folder");
+
+    let resolved_file = match raw_file {
+        Some(path) if path.is_absolute() => {
+            Some(documents::resolve_sandbox_path(conn, &path, Entity::File).await)
+        }
+        _ => None,
+    };
+
+    let folder_hint = match raw_folder {
+        Some(path) if path.is_absolute() => {
+            Some(documents::resolve_sandbox_path(conn, &path, Entity::Folder).await)
+        }
+        Some(_) => {
+            tracing::debug!("ignoring relative current_folder");
+            None
+        }
+        None => resolved_file.as_deref().and_then(parent_dir),
+    };
+
+    let current_folder = documents::existing_dir(folder_hint, home_dir);
+    let current_name =
+        save_current_name(dict::as_str(&options, "current_name"), resolved_file.as_deref());
+    let current_file = resolved_file.filter(|p| p.exists());
 
     let accept = dict::as_str(&options, "accept_label").unwrap_or_else(|| match mode {
         FileMode::Open => "Open".into(),
@@ -129,7 +155,8 @@ fn build_request(title: &str, options: Options, mode: FileMode) -> FileChooserRe
         current_filter,
         choices: dict::as_choices(&options, "choices"),
         current_folder,
-        current_name: save_current_name(dict::as_str(&options, "current_name"), current_file.as_deref()),
+        current_file,
+        current_name,
         save_names: dict::as_files(&options, "files"),
     }
 }

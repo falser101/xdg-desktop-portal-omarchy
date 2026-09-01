@@ -17,13 +17,33 @@ pub enum PickerRequest {
     AppChooser(AppChooserRequest),
     Access(AccessRequest),
     Account(AccountRequest),
+    Background {
+        title: String,
+        subtitle: String,
+        body: String,
+    },
     Wallpaper { uri: String },
     Confirm {
         title: String,
         subtitle: String,
         accept: String,
     },
+    DynamicLauncher {
+        main_text: String,
+        subtitle: String,
+        name: String,
+        #[serde(default)]
+        icon_path: String,
+        #[serde(default)]
+        target: String,
+        #[serde(default = "default_true")]
+        editable_name: bool,
+    },
     Screenshot,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -38,9 +58,16 @@ pub enum PickerReply {
     },
     Access(AccessResult),
     Account(AccountResult),
+    /// 0 Forbid, 1 Allow, 2 Allow once
+    Background { result: u32 },
     Wallpaper { granted: bool },
     Share { selection: String },
     Confirm { accepted: bool },
+    DynamicLauncher {
+        accepted: bool,
+        #[serde(default)]
+        name: String,
+    },
     Screenshot { target: u32 },
 }
 
@@ -59,6 +86,14 @@ pub fn run_blocking(req: PickerRequest) -> PickerReply {
         PickerRequest::Account(r) => crate::ui::run_account(r, token)
             .map(PickerReply::Account)
             .unwrap_or(PickerReply::Cancel),
+        PickerRequest::Background {
+            title,
+            subtitle,
+            body,
+        } => PickerReply::Background {
+            // Closing the dialog without a choice matches KDE Allow once.
+            result: crate::ui::run_background(title, subtitle, body, token).unwrap_or(2),
+        },
         PickerRequest::Wallpaper { uri } => PickerReply::Wallpaper {
             granted: crate::ui::run_wallpaper_confirm(uri, token),
         },
@@ -69,6 +104,23 @@ pub fn run_blocking(req: PickerRequest) -> PickerReply {
         } => PickerReply::Confirm {
             accepted: crate::ui::run_confirm(title, subtitle, accept, token),
         },
+        PickerRequest::DynamicLauncher {
+            main_text,
+            subtitle,
+            name,
+            ..
+        } => {
+            let accepted = crate::ui::run_confirm(
+                main_text,
+                subtitle,
+                "Create".into(),
+                token,
+            );
+            PickerReply::DynamicLauncher {
+                accepted,
+                name,
+            }
+        }
         PickerRequest::Screenshot => {
             if crate::ui::run_confirm(
                 "Take a screenshot?".into(),
@@ -179,8 +231,10 @@ async fn run_via_shell(req: PickerRequest, token: CancellationToken) -> Option<P
         PickerRequest::AppChooser(_) => "AppChooser",
         PickerRequest::Access(_) => "Access",
         PickerRequest::Account(_) => "Account",
+        PickerRequest::Background { .. } => "Background",
         PickerRequest::Wallpaper { .. } => "Wallpaper",
         PickerRequest::Confirm { .. } => "Confirm",
+        PickerRequest::DynamicLauncher { .. } => "DynamicLauncher",
         PickerRequest::Screenshot => "Screenshot",
     };
 
@@ -220,7 +274,17 @@ async fn run_via_shell(req: PickerRequest, token: CancellationToken) -> Option<P
                 if done_file.exists() {
                     let bytes = std::fs::read(&reply_file).ok()?;
                     let _ = std::fs::remove_dir_all(&tmp);
-                    return serde_json::from_slice(&bytes).ok();
+                    match serde_json::from_slice::<PickerReply>(&bytes) {
+                        Ok(reply) => return Some(reply),
+                        Err(err) => {
+                            tracing::warn!(
+                                error = %err,
+                                raw = %String::from_utf8_lossy(&bytes),
+                                "portal shell reply deserialize failed"
+                            );
+                            return None;
+                        }
+                    }
                 }
             }
         }

@@ -27,6 +27,9 @@ pub struct FileChooserRequest {
     pub current_filter: Option<usize>,
     pub choices: Vec<Choice>,
     pub current_folder: PathBuf,
+    /// Host path of `current_file` after document-portal restore (Save preselect).
+    #[serde(default)]
+    pub current_file: Option<PathBuf>,
     pub current_name: String,
     pub save_names: Vec<String>,
 }
@@ -111,11 +114,15 @@ impl ChooserApp {
             .current_filter
             .or_else(|| if req.filters.is_empty() { None } else { Some(0) });
         let choice_values = req.choices.iter().map(|c| c.selected.clone()).collect();
+        let preselect = req
+            .current_file
+            .clone()
+            .filter(|p| p.parent().is_some_and(|parent| parent == folder) && p.exists());
         let mut app = Self {
             req,
             folder: folder.clone(),
             entries: Vec::new(),
-            selected: Vec::new(),
+            selected: preselect.into_iter().collect(),
             filter_index,
             filename,
             query: String::new(),

@@ -103,6 +103,18 @@ Item {
     finish({ "kind": "Confirm", "accepted": true })
   }
 
+  function acceptDynamicLauncher(name) {
+    finish({
+      "kind": "DynamicLauncher",
+      "accepted": true,
+      "name": String(name || "")
+    })
+  }
+
+  function acceptBackground(result) {
+    finish({ "kind": "Background", "result": Number(result) })
+  }
+
   function acceptScreenshot(target) {
     finish({ "kind": "Screenshot", "target": Number(target) })
   }
@@ -123,7 +135,9 @@ Item {
     id: panel
     visible: root.opened
     // Match KDE window titles where the dialog has a distinct one.
-    title: root.kind === "Account" ? "User Information Requested" : "Omarchy Portal"
+    title: root.kind === "Account" ? "User Information Requested"
+         : (root.kind === "Background" ? "Background Activity"
+         : (root.kind === "DynamicLauncher" ? "Launcher Requested" : "Omarchy Portal"))
     color: Color.popups.background
     implicitWidth: dialogLoader.item && dialogLoader.item.cardWidth ? dialogLoader.item.cardWidth : 480
     implicitHeight: dialogLoader.item && dialogLoader.item.cardHeight ? dialogLoader.item.cardHeight : 280
@@ -135,8 +149,13 @@ Item {
     }
 
     onVisibleChanged: {
-      if (!visible && root.opened && !root.finishing)
-        root.finish({ "kind": "Cancel" })
+      if (!visible && root.opened && !root.finishing) {
+        // KDE treats dismissing the Background prompt without a choice as Allow once.
+        if (root.kind === "Background")
+          root.finish({ "kind": "Background", "result": 2 })
+        else
+          root.finish({ "kind": "Cancel" })
+      }
     }
 
     FocusScope {
@@ -156,11 +175,13 @@ Item {
           switch (root.kind) {
           case "Access": return accessComp
           case "Account": return accountComp
+          case "Background": return backgroundComp
           case "Wallpaper": return wallpaperComp
           case "AppChooser": return appComp
           case "FileChooser": return fileComp
           case "Share": return shareComp
           case "Confirm": return confirmComp
+          case "DynamicLauncher": return dynamicLauncherComp
           case "Screenshot": return screenshotComp
           default: return accessComp
           }
@@ -193,6 +214,14 @@ Item {
         else
           root.finish({ "kind": "Cancel" })
       }
+    }
+  }
+
+  Component {
+    id: backgroundComp
+    BackgroundDialog {
+      request: root.request
+      onDecided: function(result) { root.acceptBackground(result) }
     }
   }
 
@@ -245,6 +274,20 @@ Item {
       onRejected: root.finish({ "kind": "Cancel" })
       Keys.onPressed: function(e) { if (handleKey(e)) e.accepted = true }
       focus: true
+    }
+  }
+
+  Component {
+    id: dynamicLauncherComp
+    DynamicLauncherDialog {
+      request: root.request
+      extra: root.extra
+      onDecided: function(accepted, name) {
+        if (accepted)
+          root.acceptDynamicLauncher(name)
+        else
+          root.finish({ "kind": "Cancel" })
+      }
     }
   }
 

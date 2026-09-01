@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     server.at(DBUS_PATH, Wallpaper(ctx.clone())).await?;
     server.at(DBUS_PATH, Lockdown::default()).await?;
     server.at(DBUS_PATH, Screenshot(ctx.clone())).await?;
-    server.at(DBUS_PATH, Background(ctx.clone())).await?;
+    server.at(DBUS_PATH, Background::new(ctx.clone())).await?;
     server.at(DBUS_PATH, DynamicLauncher(ctx.clone())).await?;
     connection.request_name(DBUS_NAME).await?;
 
@@ -87,6 +87,7 @@ fn demo(kind: &str) -> anyhow::Result<()> {
                 current_filter: None,
                 choices: vec![],
                 current_folder: xdg_desktop_portal_omarchy::paths::home_dir(),
+                current_file: None,
                 current_name: String::new(),
                 save_names: vec![],
             };

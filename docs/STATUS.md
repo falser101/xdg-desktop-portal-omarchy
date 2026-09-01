@@ -53,7 +53,7 @@ App
 | Wallpaper | done | [portals/Wallpaper.md](portals/Wallpaper.md) |
 | Lockdown | stub | [portals/Lockdown.md](portals/Lockdown.md) |
 | Screenshot | done | [portals/Screenshot.md](portals/Screenshot.md) |
-| Background | done | [portals/Background.md](portals/Background.md) |
+| Background | done (Allow / Allow once / Forbid + state signal) | [portals/Background.md](portals/Background.md) |
 | DynamicLauncher | done | [portals/DynamicLauncher.md](portals/DynamicLauncher.md) |
 | ScreenCast | delegated + Omarchy preview picker | [ScreenCast.en.md](portals/ScreenCast.en.md) · [中文](portals/ScreenCast.md) |
 | GlobalShortcuts | delegated | [portals/GlobalShortcuts.md](portals/GlobalShortcuts.md) |

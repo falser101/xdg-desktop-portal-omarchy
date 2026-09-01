@@ -35,6 +35,7 @@ PortalDialog {
   property string lastSegmentEdit: ""
   property string sortKey: "name"
   property bool sortReversed: false
+  property bool didPreselectCurrentFile: false
 
   title: String(request.title || (saveMode ? "Save" : (dirMode ? "Select folder" : "Open")))
   acceptText: String(request.accept_label || (saveMode || saveFilesMode ? "Save" : (dirMode ? "Select" : "Open")))
@@ -433,6 +434,26 @@ PortalDialog {
     else
       files.sortField = FolderListModel.Name
     files.sortReversed = sortReversed
+    // Keep directories pinned; Qt resets this when sortField changes on some versions.
+    files.showDirsFirst = true
+  }
+
+  function tryPreselectCurrentFile() {
+    if (root.didPreselectCurrentFile || root.recentMode)
+      return
+    var want = String(request.current_file || "")
+    if (!want.length)
+      return
+    var folderPath = root.currentPath
+    var parent = want.replace(/\/[^\/]+$/, "")
+    if (parent !== folderPath)
+      return
+    var name = want.split("/").pop()
+    root.selectedPaths = [want]
+    root.selectedIsDir = false
+    if ((root.saveMode || root.saveFilesMode) && name)
+      root.filename = name
+    root.didPreselectCurrentFile = true
   }
 
   function sortHeading(label, key) {
@@ -549,6 +570,7 @@ PortalDialog {
       initial[String(c.id || i)] = String(c.selected || fallback)
     }
     choiceValues = initial
+    tryPreselectCurrentFile()
   }
 
   onPreviewPathChanged: {
@@ -564,6 +586,7 @@ PortalDialog {
     id: files
     folder: root.folder
     showDirs: true
+    showDirsFirst: true
     showFiles: !root.dirMode || root.saveMode
     showDotAndDotDot: false
     showHidden: root.showHidden

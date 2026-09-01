@@ -7,6 +7,7 @@
 
 pub mod desktop;
 pub mod dict;
+pub mod documents;
 pub mod filters;
 pub mod paths;
 pub mod picker;
