@@ -40,13 +40,19 @@
 - stdout：`[SELECTION]r?/screen:NAME|window:ID|region:OUT@x,y,w,h`
 - 窗口 ID 来自 `XDPH_WINDOW_SHARING_LIST`；缩略图用 `hyprctl` address
 
+## 预览（对齐 KDE「先弹窗再出画」）
+
+- 对话框立刻打开；卡片用 Quickshell `ScreencopyView`（`live` 在悬停/选中时开启）
+- 显示器 → `Quickshell.screens`；窗口 → `Hyprland.toplevels` 按 address 解析
+- **不做** KDE `PipeWireSourceItem`：Hyprland 没有 `zkde_screencast_unstable_v1`
+- 不再用 grim / `omarchy-portal-capture` 预抓 PNG（曾导致 OBS 超时、堵死 xdph）
+
 ## 延后
 
-- live PipeWire / Quickshell `ScreencopyView` 预览（KDE 用 `PipeWireSourceItem`）
-- 定时刷新静态缩略图（半 live）
 - Virtual screen / Workspace 合成输出（KDE `OutputsModel` 可选项）
 - 自绘区域 overlay（现用官方 `omarchy-capture-region`）
 - 不在本 daemon 里重复实现 PipeWire 采集引擎
+- 可见区限流 / 减轻整屏「镜子效应」
 
 ## 自测
 

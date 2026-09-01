@@ -226,12 +226,17 @@ def build_windows(raw_windows, clients):
             continue
         if c is not None and (c.get("mapped") is False or c.get("hidden") is True):
             continue
-        # Prefer hyprctl address for toplevel-export; fall back to XDPH mapping.
-        handle = None
+        # Prefer hyprctl "0x…" address string. Never put the numeric handle in
+        # JSON as a number — JS loses precision above 2^53 and ScreencopyView
+        # matching against Hyprland.toplevels fails.
+        addr_str = ""
         if c is not None:
-            handle = parse_addr(str(c.get("address") or ""))
-        if handle is None:
-            handle = parse_addr(str(w.get("address") or ""))
+            addr_str = str(c.get("address") or "").strip()
+        if not addr_str:
+            addr_str = str(w.get("address") or "").strip()
+        handle = parse_addr(addr_str)
+        if handle is not None and not addr_str.lower().startswith("0x"):
+            addr_str = hex(handle)
         wid = str(w.get("id") or "")
         label = klass or "Window"
         if title:
@@ -249,8 +254,8 @@ def build_windows(raw_windows, clients):
                 "id": wid,
                 "className": klass,
                 "title": title,
-                "address": w.get("address") or "",
-                "handle": handle,
+                "address": addr_str,
+                "handle": addr_str,
                 "label": label,
                 "value": f"window:{wid}",
                 "preview": path,
@@ -345,8 +350,7 @@ windows = build_windows(
 )
 client_list = clients if isinstance(clients, list) else []
 client_tasks_for_screens(screens, client_list)
-# Captures only real screens/windows; synthetics (region) have no preview.
-capture(screens, windows)
+# Live previews are ScreencopyView in QML — do not block on grim/PNG here.
 outputs = screens + build_synthetics()
 
 print(

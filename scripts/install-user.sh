@@ -72,20 +72,15 @@ PY
 
 XDPH="$CONFIG/hypr/xdph.conf"
 mkdir -p "$CONFIG/hypr"
-if [[ -f $XDPH ]]; then
-  if grep -q 'custom_picker_binary' "$XDPH"; then
-    sed -i "s|custom_picker_binary *=.*|    custom_picker_binary = $HOME/.local/bin/omarchy-share-picker|" "$XDPH"
-  else
-    printf '\n    custom_picker_binary = %s\n' "$HOME/.local/bin/omarchy-share-picker" >>"$XDPH"
-  fi
-else
-  cat >"$XDPH" <<EOF
+# Always rewrite a known-good block. A previous sed left runaway leading
+# spaces on custom_picker_binary and allow_token_by_default=true made OBS
+# skip the picker after the first successful share.
+cat >"$XDPH" <<EOF
 screencopy {
-    allow_token_by_default = true
+    allow_token_by_default = false
     custom_picker_binary = $HOME/.local/bin/omarchy-share-picker
 }
 EOF
-fi
 
 HYPR="$CONFIG/hypr/hyprland.lua"
 if [[ -f $HYPR ]] && ! grep -Fq 'Omarchy Portal' "$HYPR"; then

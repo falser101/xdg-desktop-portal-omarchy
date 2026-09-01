@@ -40,13 +40,19 @@ Routing: `omarchy-portals.conf` / `~/.config/hypr/xdph.conf` (`custom_picker_bin
 - stdout: `[SELECTION]r?/screen:NAME|window:ID|region:OUT@x,y,w,h`
 - Window IDs from `XDPH_WINDOW_SHARING_LIST`; thumbnails use `hyprctl` addresses
 
+## Previews (KDE-style: open first, paint after)
+
+- Dialog opens immediately; cards use Quickshell `ScreencopyView` (`live` while hovered/selected)
+- Displays → `Quickshell.screens`; windows → `Hyprland.toplevels` by address
+- **Not** KDE `PipeWireSourceItem` — Hyprland lacks `zkde_screencast_unstable_v1`
+- No grim / `omarchy-portal-capture` PNG prefetch (that used to hang OBS / block xdph)
+
 ## Deferred
 
-- Live PipeWire / Quickshell `ScreencopyView` preview (KDE uses `PipeWireSourceItem`)
-- Periodic refresh of static thumbnails (semi-live)
 - Virtual screen / Workspace synthetic outputs (KDE `OutputsModel` options)
 - Custom region overlay (currently uses stock `omarchy-capture-region`)
 - No PipeWire capture engine reimplemented in this daemon
+- Viewport throttling / reduce monitor “hall of mirrors”
 
 ## Self-test
 

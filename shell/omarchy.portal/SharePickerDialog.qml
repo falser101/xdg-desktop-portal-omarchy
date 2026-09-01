@@ -2,12 +2,16 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import Quickshell
+import Quickshell.Wayland
+import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 
 // Layout aligned with xdg-desktop-portal-kde ScreenChooserDialog:
 // header chips + search → Displays grid → "Windows" separator → window cards.
 // Selection: default first item; arrows move; Enter / Share confirms.
+// Previews: Quickshell ScreencopyView (live compositor capture), like KDE's
+// PipeWireSourceItem — dialog opens immediately; no grim/PNG prefetch.
 PortalDialog {
   id: root
 
@@ -19,6 +23,9 @@ PortalDialog {
 
   readonly property var allScreens: extra.screens || []
   readonly property var allWindows: extra.windows || []
+  readonly property var hyprToplevels: (Hyprland.toplevels && Hyprland.toplevels.values)
+    ? Hyprland.toplevels.values
+    : []
 
   title: "Screen Sharing Requested"
   subtitle: "Choose a display, window, or region to share"
@@ -202,13 +209,73 @@ PortalDialog {
     selectedGeometries = next
   }
 
-  function previewUrl(path) {
-    var p = String(path || "")
-    if (!p.length)
+  function normalizeAddr(addr) {
+    var a = String(addr || "").trim().toLowerCase()
+    if (!a || a === "0" || a === "null" || a === "undefined")
       return ""
-    if (p.indexOf("file:") === 0)
-      return p
-    return "file://" + p
+    if (a.indexOf("0x") === 0)
+      return a
+    // Decimal from older payloads — prefer BigInt so >2^53 stays exact.
+    if (/^\d+$/.test(a)) {
+      try {
+        return "0x" + BigInt(a).toString(16)
+      } catch (e) {
+        var n = parseInt(a, 10)
+        if (!isFinite(n))
+          return a
+        return "0x" + n.toString(16)
+      }
+    }
+    return a
+  }
+
+  function screenForName(name) {
+    var n = String(name || "")
+    if (!n.length)
+      return null
+    var screens = Quickshell.screens || []
+    for (var i = 0; i < screens.length; i++) {
+      if (String(screens[i].name || "") === n)
+        return screens[i]
+    }
+    return null
+  }
+
+  function toplevelWaylandForItem(item) {
+    if (!item)
+      return null
+    // Touch length so bindings refresh when Hyprland IPC updates.
+    var tops = root.hyprToplevels
+    var _n = tops.length
+    var want = normalizeAddr(item.address || item.handle || "")
+    if (want) {
+      for (var i = 0; i < tops.length; i++) {
+        var t = tops[i]
+        var ipcAddr = t.lastIpcObject ? t.lastIpcObject.address : ""
+        var a = normalizeAddr(t.address || ipcAddr || "")
+        if (a && a === want)
+          return t.wayland || null
+      }
+    }
+    // Fallback: class + title (XDPH address is often "0" / unmapped).
+    var klass = String(item.className || item.class || "")
+    var title = String(item.title || "")
+    var classHits = []
+    for (var j = 0; j < tops.length; j++) {
+      var top = tops[j]
+      if (!top.wayland)
+        continue
+      var ipc = top.lastIpcObject || {}
+      var tc = String(ipc.class || ipc.initialClass || "")
+      var tt = String(top.title || ipc.title || "")
+      if (klass && tc === klass && title && tt === title)
+        return top.wayland
+      if (klass && tc === klass)
+        classHits.push(top.wayland)
+    }
+    if (classHits.length === 1)
+      return classHits[0]
+    return null
   }
 
   function iconSource(icon) {
@@ -387,7 +454,10 @@ PortalDialog {
   onSelectedGeometriesChanged: Qt.callLater(ensureDefaultSelection)
   onAllScreensChanged: Qt.callLater(ensureDefaultSelection)
   onAllWindowsChanged: Qt.callLater(ensureDefaultSelection)
-  Component.onCompleted: Qt.callLater(ensureDefaultSelection)
+  Component.onCompleted: {
+    try { Hyprland.refreshToplevels() } catch (e) {}
+    Qt.callLater(ensureDefaultSelection)
+  }
 
   Keys.onPressed: function (e) {
     if (handleNavKey(e)) {
@@ -599,26 +669,41 @@ PortalDialog {
                     radius: Style.cornerRadius
                     clip: true
 
-                    Image {
-                      id: displayThumb
+                    readonly property var captureSrc: displayCard.item.synthetic
+                      ? null
+                      : root.screenForName(displayCard.item.name)
+
+                    ScreencopyView {
+                      id: displayLive
                       anchors.fill: parent
                       anchors.margins: Style.space(4)
-                      fillMode: Image.PreserveAspectFit
-                      asynchronous: true
-                      cache: true
-                      source: root.previewUrl(displayCard.item.preview)
-                      sourceSize.width: 640
-                      sourceSize.height: 400
-                      visible: status === Image.Ready
+                      captureSource: parent.captureSrc
+                      // Live for selected/hovered; still frame otherwise (cheaper).
+                      live: displayCard.hot || displayCard.sel
+                      paintCursor: false
+                      visible: parent.captureSrc && hasContent
+                      onCaptureSourceChanged: {
+                        if (captureSource && !live)
+                          Qt.callLater(captureFrame)
+                      }
+                      onLiveChanged: {
+                        if (captureSource && !live)
+                          Qt.callLater(captureFrame)
+                      }
+                      Component.onCompleted: {
+                        if (captureSource && !live)
+                          Qt.callLater(captureFrame)
+                      }
                     }
 
-                    Text {
+                    Image {
                       anchors.centerIn: parent
-                      visible: displayThumb.status !== Image.Ready
-                      text: "Display"
-                      color: Color.muted
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption || Style.font.body
+                      width: Style.space(40)
+                      height: Style.space(40)
+                      visible: !displayLive.visible
+                      source: root.iconSource(displayCard.item.icon || "video-display")
+                      fillMode: Image.PreserveAspectFit
+                      asynchronous: true
                     }
                   }
                 }
@@ -678,6 +763,10 @@ PortalDialog {
                 readonly property var item: modelData
                 readonly property bool sel: root.isSelected(item.value)
                 readonly property bool hot: winHover.hovered || sel
+                readonly property var captureSrc: {
+                  var _dep = root.hyprToplevels.length
+                  return root.toplevelWaylandForItem(item)
+                }
 
                 Layout.fillWidth: false
                 Layout.preferredWidth: root.tileCardWidth
@@ -725,24 +814,22 @@ PortalDialog {
                     radius: Style.cornerRadius
                     clip: true
 
-                    Image {
-                      id: winThumb
+                    ScreencopyView {
+                      id: winLive
                       anchors.fill: parent
                       anchors.margins: Style.space(4)
-                      fillMode: Image.PreserveAspectFit
-                      asynchronous: true
-                      cache: true
-                      source: root.previewUrl(windowCard.item.preview)
-                      sourceSize.width: 480
-                      sourceSize.height: 320
-                      visible: status === Image.Ready
+                      captureSource: windowCard.captureSrc
+                      // Window toplevel-export is cheap enough to keep live.
+                      live: !!windowCard.captureSrc
+                      paintCursor: false
+                      visible: !!windowCard.captureSrc && hasContent
                     }
 
                     Image {
                       anchors.centerIn: parent
                       width: Style.space(48)
                       height: Style.space(48)
-                      visible: winThumb.status !== Image.Ready
+                      visible: !winLive.visible
                       source: root.iconSource(windowCard.item.icon || windowCard.item.className)
                       fillMode: Image.PreserveAspectFit
                       asynchronous: true
