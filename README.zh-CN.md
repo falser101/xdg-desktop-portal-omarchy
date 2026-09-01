@@ -23,9 +23,9 @@ Access 等交互对话框由本仓库实现。
 | FileChooser | 已实现 | [FileChooser](docs/portals/FileChooser.md) |
 | Settings | 已实现 | [Settings](docs/portals/Settings.md) |
 | AppChooser | 已实现 | [AppChooser](docs/portals/AppChooser.md) |
-| Account | 已实现 | [Account](docs/portals/Account.md) |
+| Account | 已实现（对齐 KDE UserInfoDialog） | [Account](docs/portals/Account.md) |
 | Access | 已实现 | [Access](docs/portals/Access.md) |
-| Notification | 已实现 | [Notification](docs/portals/Notification.md) |
+| Notification | 已实现（FDO 桥；action / 图标 / 常驻） | [Notification](docs/portals/Notification.md) |
 | Inhibit | 已实现 | [Inhibit](docs/portals/Inhibit.md) |
 | Email | 已实现 | [Email](docs/portals/Email.md) |
 | Wallpaper | 已实现 | [Wallpaper](docs/portals/Wallpaper.md) |

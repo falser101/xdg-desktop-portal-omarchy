@@ -25,9 +25,9 @@ this backend.
 | FileChooser | done | [FileChooser](docs/portals/FileChooser.md) |
 | Settings | done | [Settings](docs/portals/Settings.md) |
 | AppChooser | done | [AppChooser](docs/portals/AppChooser.md) |
-| Account | done | [Account](docs/portals/Account.md) |
+| Account | done (KDE UserInfoDialog) | [Account](docs/portals/Account.md) |
 | Access | done | [Access](docs/portals/Access.md) |
-| Notification | done | [Notification](docs/portals/Notification.md) |
+| Notification | done (FDO bridge; actions / icon / persistent) | [Notification](docs/portals/Notification.md) |
 | Inhibit | done | [Inhibit](docs/portals/Inhibit.md) |
 | Email | done | [Email](docs/portals/Email.md) |
 | Wallpaper | done | [Wallpaper](docs/portals/Wallpaper.md) |

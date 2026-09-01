@@ -59,6 +59,8 @@ def main() -> int:
             "screenshot",
             "pick-color",
             "background",
+            "notification",
+            "notification-remove",
         ],
     )
     parser.add_argument("--timeout", type=int, default=20000)
@@ -377,6 +379,80 @@ def main() -> int:
         box = wait_request(bus, handle, args.timeout)
         print(json.dumps({"response": box["response"], "results": box["results"]}))
         return 0 if box["done"] else 2
+
+    if args.kind == "notification":
+        # Frontend portal; exercises AddNotification with buttons + default-action
+        # + persistent hint. Click the toast / button to fire ActionInvoked.
+        proxy = Gio.DBusProxy.new_sync(
+            bus,
+            Gio.DBusProxyFlags.NONE,
+            None,
+            "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.portal.Notification",
+            None,
+        )
+        notif = {
+            "title": GLib.Variant("s", "Portal notification test"),
+            "body": GLib.Variant(
+                "s", "Click the toast (default) or the Open button."
+            ),
+            "priority": GLib.Variant("s", "normal"),
+            "icon": GLib.Variant("s", "dialog-information"),
+            "default-action": GLib.Variant("s", "open-main"),
+            "buttons": GLib.Variant(
+                "aa{sv}",
+                [
+                    {
+                        "label": GLib.Variant("s", "Open"),
+                        "action": GLib.Variant("s", "open-main"),
+                    },
+                    {
+                        "label": GLib.Variant("s", "Dismiss"),
+                        "action": GLib.Variant("s", "dismiss"),
+                    },
+                ],
+            ),
+            "display-hint": GLib.Variant("as", ["persistent"]),
+        }
+        proxy.call_sync(
+            "AddNotification",
+            GLib.Variant("(sa{sv})", ("portal-call-test", notif)),
+            Gio.DBusCallFlags.NONE,
+            args.timeout,
+            None,
+        )
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "id": "portal-call-test",
+                    "hint": "Toast should appear; click it or Open. Then: portal-call.py notification-remove",
+                }
+            ),
+            flush=True,
+        )
+        return 0
+
+    if args.kind == "notification-remove":
+        proxy = Gio.DBusProxy.new_sync(
+            bus,
+            Gio.DBusProxyFlags.NONE,
+            None,
+            "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.portal.Notification",
+            None,
+        )
+        proxy.call_sync(
+            "RemoveNotification",
+            GLib.Variant("(s)", ("portal-call-test",)),
+            Gio.DBusCallFlags.NONE,
+            args.timeout,
+            None,
+        )
+        print(json.dumps({"ok": True, "removed": "portal-call-test"}), flush=True)
+        return 0
 
     return 1
 

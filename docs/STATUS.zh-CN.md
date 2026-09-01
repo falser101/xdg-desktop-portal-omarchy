@@ -40,9 +40,9 @@
 | FileChooser | 已实现 | [portals/FileChooser.md](portals/FileChooser.md) |
 | Settings | 已实现 | [portals/Settings.md](portals/Settings.md) |
 | AppChooser | 已实现（含设为默认 → mimeapps） | [portals/AppChooser.md](portals/AppChooser.md) |
-| Account | 已实现 | [portals/Account.md](portals/Account.md) |
+| Account | 已实现（对齐 KDE UserInfoDialog） | [portals/Account.md](portals/Account.md) |
 | Access | 已实现（choices / icon） | [portals/Access.md](portals/Access.md) |
-| Notification | 已实现 | [portals/Notification.md](portals/Notification.md) |
+| Notification | 已实现（薄桥 → FDO；含 action / 图标 / 常驻） | [portals/Notification.md](portals/Notification.md) |
 | Inhibit | 已实现 | [portals/Inhibit.md](portals/Inhibit.md) |
 | Email | 已实现 | [portals/Email.md](portals/Email.md) |
 | Wallpaper | 已实现 | [portals/Wallpaper.md](portals/Wallpaper.md) |
@@ -77,6 +77,9 @@ python3 scripts/portal-call.py open
 python3 scripts/portal-call.py save
 python3 scripts/portal-call.py open-dir
 python3 scripts/portal-call.py account
+cargo run -- --demo account
+python3 scripts/portal-call.py notification
+python3 scripts/portal-call.py notification-remove
 python3 scripts/portal-call.py open-uri
 python3 scripts/portal-call.py screenshot
 python3 scripts/portal-call.py pick-color

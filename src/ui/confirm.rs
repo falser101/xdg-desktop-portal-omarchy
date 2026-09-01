@@ -28,8 +28,15 @@ pub struct AccessResult {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AccountRequest {
+    /// KDE mainText: "Share user info with {app}?"
     pub title: String,
-    pub reason: String,
+    /// KDE subtitle: what will be shared + reason / no-reason note.
+    pub subtitle: String,
+    pub username: String,
+    pub real_name: String,
+    /// Local path (or theme icon path) shown as the avatar.
+    #[serde(default)]
+    pub image: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -108,13 +115,25 @@ fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult
         PromptKind::Access(r) => r.choices.iter().map(|c| c.selected.clone()).collect(),
         _ => Vec::new(),
     };
+    let size = match &kind {
+        PromptKind::Account(_) => [440.0, 460.0],
+        _ => [520.0, 280.0],
+    };
     let state = Arc::new(Mutex::new(PromptApp {
         kind,
         choice_values,
         accepted: None,
     }));
     let ui_state = Arc::clone(&state);
-    let _ = run_native(title, [520.0, 280.0], PromptUi { state: ui_state, token });
+    let _ = run_native(
+        title,
+        size,
+        PromptUi {
+            state: ui_state,
+            token,
+            account_avatar: None,
+        },
+    );
     let app = state.lock().unwrap();
     match (app.accepted, &app.kind) {
         (Some(true), PromptKind::Access(req)) => Some(PromptResult::Access(AccessResult {
@@ -130,11 +149,28 @@ fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult
             granted: false,
             choices: Vec::new(),
         })),
-        (Some(true), PromptKind::Account(_)) => Some(PromptResult::Account(AccountResult {
-            id: whoami(),
-            name: real_name(),
-            image: face_image(),
-        })),
+        (Some(true), PromptKind::Account(req)) => {
+            let image = req
+                .image
+                .as_deref()
+                .map(PathBuf::from)
+                .filter(|p| p.is_file())
+                .or_else(face_image)
+                .or_else(|| Some(crate::paths::account_image(None)));
+            Some(PromptResult::Account(AccountResult {
+                id: if req.username.is_empty() {
+                    whoami()
+                } else {
+                    req.username.clone()
+                },
+                name: if req.real_name.is_empty() {
+                    real_name()
+                } else {
+                    req.real_name.clone()
+                },
+                image,
+            }))
+        }
         (Some(true), PromptKind::Wallpaper { .. }) => Some(PromptResult::Granted),
         (Some(true), PromptKind::Confirm { .. }) => Some(PromptResult::Granted),
         _ => None,
@@ -144,6 +180,7 @@ fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult
 struct PromptUi {
     state: Arc<Mutex<PromptApp>>,
     token: CancellationToken,
+    account_avatar: Option<egui::TextureHandle>,
 }
 
 impl eframe::App for PromptUi {
@@ -157,6 +194,29 @@ impl eframe::App for PromptUi {
         let mut close = false;
         let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
         let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        if self.account_avatar.is_none() {
+            let path = self.state.lock().ok().and_then(|app| match &app.kind {
+                PromptKind::Account(req) => req
+                    .image
+                    .as_deref()
+                    .map(PathBuf::from)
+                    .filter(|p| p.is_file()),
+                _ => None,
+            });
+            if let Some(path) = path {
+                if let Ok(bytes) = std::fs::read(&path) {
+                    if let Ok(img) = image::load_from_memory(&bytes) {
+                        let rgba = img.to_rgba8();
+                        let size = [rgba.width() as usize, rgba.height() as usize];
+                        self.account_avatar = Some(ctx.load_texture(
+                            "account-avatar",
+                            egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()),
+                            egui::TextureOptions::LINEAR,
+                        ));
+                    }
+                }
+            }
+        }
         {
             let mut app = self.state.lock().unwrap();
             if app.accepted.is_some() {
@@ -177,13 +237,36 @@ impl eframe::App for PromptUi {
                         }
                         PromptKind::Account(req) => {
                             ui.label(RichText::new(&req.title).size(18.0).strong());
-                            ui.add_space(8.0);
-                            ui.label(format!("User: {}", whoami()));
-                            ui.label(format!("Name: {}", real_name()));
-                            if !req.reason.is_empty() {
-                                ui.add_space(8.0);
-                                ui.label(&req.reason);
+                            if !req.subtitle.is_empty() {
+                                ui.add_space(6.0);
+                                ui.label(
+                                    RichText::new(&req.subtitle)
+                                        .color(super::visuals::rgb(theme.muted)),
+                                );
                             }
+                            ui.add_space(12.0);
+                            if let Some(tex) = self.account_avatar.as_ref() {
+                                ui.with_layout(
+                                    egui::Layout::top_down(egui::Align::Center),
+                                    |ui| {
+                                        ui.add(
+                                            egui::Image::new(tex)
+                                                .fit_to_exact_size(egui::vec2(96.0, 96.0))
+                                                .corner_radius(48.0),
+                                        );
+                                    },
+                                );
+                                ui.add_space(8.0);
+                            }
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                                if !req.real_name.is_empty() {
+                                    ui.label(RichText::new(&req.real_name).size(16.0).strong());
+                                }
+                                ui.label(
+                                    RichText::new(&req.username)
+                                        .color(super::visuals::rgb(theme.muted)),
+                                );
+                            });
                         }
                         PromptKind::Wallpaper { uri } => {
                             ui.label(RichText::new("Set Omarchy wallpaper?").size(18.0).strong());
@@ -257,6 +340,7 @@ impl eframe::App for PromptUi {
                     ui.add_space(16.0);
                     let (deny, grant) = match &app.kind {
                         PromptKind::Access(req) => (req.deny_label.clone(), req.grant_label.clone()),
+                        PromptKind::Account(_) => ("Cancel".into(), "Share".into()),
                         PromptKind::Confirm { accept, .. } => ("Cancel".into(), accept.clone()),
                         _ => ("Cancel".into(), "Allow".into()),
                     };

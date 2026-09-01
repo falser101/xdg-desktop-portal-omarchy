@@ -45,9 +45,9 @@ App
 | FileChooser | done | [portals/FileChooser.md](portals/FileChooser.md) |
 | Settings | done | [portals/Settings.md](portals/Settings.md) |
 | AppChooser | done (set default → mimeapps) | [portals/AppChooser.md](portals/AppChooser.md) |
-| Account | done | [portals/Account.md](portals/Account.md) |
+| Account | done (KDE UserInfoDialog layout) | [portals/Account.md](portals/Account.md) |
 | Access | done (choices / icon) | [portals/Access.md](portals/Access.md) |
-| Notification | done | [portals/Notification.md](portals/Notification.md) |
+| Notification | done (bridge → FDO; actions / icon / persistent) | [portals/Notification.md](portals/Notification.md) |
 | Inhibit | done | [portals/Inhibit.md](portals/Inhibit.md) |
 | Email | done | [portals/Email.md](portals/Email.md) |
 | Wallpaper | done | [portals/Wallpaper.md](portals/Wallpaper.md) |
@@ -84,6 +84,9 @@ python3 scripts/portal-call.py open
 python3 scripts/portal-call.py save
 python3 scripts/portal-call.py open-dir
 python3 scripts/portal-call.py account
+cargo run -- --demo account
+python3 scripts/portal-call.py notification
+python3 scripts/portal-call.py notification-remove
 python3 scripts/portal-call.py open-uri
 python3 scripts/portal-call.py screenshot
 python3 scripts/portal-call.py pick-color

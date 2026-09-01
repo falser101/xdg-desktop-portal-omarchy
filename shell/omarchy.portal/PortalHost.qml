@@ -59,11 +59,14 @@ Item {
   }
 
   function acceptAccount() {
+    var id = String(request.username || extra.user || "")
+    var name = String(request.real_name || extra.realName || id)
+    var image = request.image || extra.image || null
     finish({
       "kind": "Account",
-      "id": String(request.id || extra.user || ""),
-      "name": String(request.name || extra.realName || ""),
-      "image": extra.image || null
+      "id": id,
+      "name": name,
+      "image": image
     })
   }
 
@@ -119,7 +122,8 @@ Item {
   FloatingWindow {
     id: panel
     visible: root.opened
-    title: "Omarchy Portal"
+    // Match KDE window titles where the dialog has a distinct one.
+    title: root.kind === "Account" ? "User Information Requested" : "Omarchy Portal"
     color: Color.popups.background
     implicitWidth: dialogLoader.item && dialogLoader.item.cardWidth ? dialogLoader.item.cardWidth : 480
     implicitHeight: dialogLoader.item && dialogLoader.item.cardHeight ? dialogLoader.item.cardHeight : 280
@@ -180,22 +184,14 @@ Item {
 
   Component {
     id: accountComp
-    PortalDialog {
-      title: String(root.request.title || "Share account information")
-      subtitle: String(root.request.reason || "")
-      acceptText: "Allow"
-      cardWidth: Style.space(420)
-      cardHeight: Style.space(240)
-      onAccepted: root.acceptAccount()
-      onRejected: root.finish({ "kind": "Cancel" })
-      Keys.onPressed: function(e) { if (handleKey(e)) e.accepted = true }
-      focus: true
-      Text {
-        width: parent.width
-        text: "User: " + String(root.extra.user || "") + "\nName: " + String(root.extra.realName || "")
-        color: Color.foreground
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
+    AccountDialog {
+      request: root.request
+      extra: root.extra
+      onDecided: function(shared) {
+        if (shared)
+          root.acceptAccount()
+        else
+          root.finish({ "kind": "Cancel" })
       }
     }
   }

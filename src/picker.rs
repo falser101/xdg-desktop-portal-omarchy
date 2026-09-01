@@ -119,14 +119,11 @@ async fn run_via_shell(req: PickerRequest, token: CancellationToken) -> Option<P
                 .collect();
             extra.insert("apps".into(), serde_json::Value::Array(apps));
         }
-        PickerRequest::Account(_) => {
-            extra.insert("user".into(), crate::paths::whoami().into());
-            extra.insert("realName".into(), crate::paths::real_name().into());
-            if let Some(img) = crate::paths::face_image() {
-                extra.insert(
-                    "image".into(),
-                    img.to_string_lossy().into_owned().into(),
-                );
+        PickerRequest::Account(r) => {
+            extra.insert("user".into(), r.username.clone().into());
+            extra.insert("realName".into(), r.real_name.clone().into());
+            if let Some(img) = r.image.as_ref() {
+                extra.insert("image".into(), img.clone().into());
             }
         }
         PickerRequest::Wallpaper { uri } => {

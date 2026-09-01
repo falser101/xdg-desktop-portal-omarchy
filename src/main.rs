@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "xdg-desktop-portal-omarchy\n  Omarchy backend for xdg-desktop-portal\n\n  --demo file-chooser   Open the file picker without D-Bus\n  --demo app-chooser    Open the app chooser without D-Bus\n  --demo access         Open the access dialog without D-Bus\n"
+            "xdg-desktop-portal-omarchy\n  Omarchy backend for xdg-desktop-portal\n\n  --demo file-chooser   Open the file picker without D-Bus\n  --demo app-chooser    Open the app chooser without D-Bus\n  --demo access         Open the access dialog without D-Bus\n  --demo account        Open the account dialog without D-Bus\n"
         );
         return Ok(());
     }
@@ -52,7 +52,9 @@ async fn main() -> anyhow::Result<()> {
     server.at(DBUS_PATH, AppChooser(ctx.clone())).await?;
     server.at(DBUS_PATH, Account(ctx.clone())).await?;
     server.at(DBUS_PATH, Access(ctx.clone())).await?;
-    server.at(DBUS_PATH, Notification::default()).await?;
+    server
+        .at(DBUS_PATH, Notification::new(ctx.clone()))
+        .await?;
     let inhibit = Inhibit::new(ctx.clone());
     inhibit.spawn_watch(connection.clone());
     server.at(DBUS_PATH, inhibit).await?;
@@ -129,6 +131,19 @@ fn demo(kind: &str) -> anyhow::Result<()> {
                 filename: Some("demo.txt".into()),
             };
             println!("{:?}", xdg_desktop_portal_omarchy::ui::run_app_chooser(req, token));
+        }
+        "account" => {
+            let username = xdg_desktop_portal_omarchy::paths::whoami();
+            let real_name = xdg_desktop_portal_omarchy::paths::real_name();
+            let image = xdg_desktop_portal_omarchy::paths::account_image(None);
+            let req = xdg_desktop_portal_omarchy::ui::AccountRequest {
+                title: "Share user info with this application?".into(),
+                subtitle: "The application will be able to see your username, full name, and profile picture.\n\nReason: “Omarchy portal demo.”".into(),
+                username,
+                real_name,
+                image: Some(image.to_string_lossy().into_owned()),
+            };
+            println!("{:?}", xdg_desktop_portal_omarchy::ui::run_account(req, token));
         }
         other => anyhow::bail!("unknown demo {other}"),
     }

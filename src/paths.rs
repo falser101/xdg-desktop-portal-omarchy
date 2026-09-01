@@ -193,6 +193,67 @@ pub fn face_image() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+/// Avatar path for Account portal: prefer an existing face file, else a
+/// themed user/avatar icon (KDE always returns a displayable image URI).
+pub fn account_image(preferred: Option<&Path>) -> PathBuf {
+    if let Some(path) = preferred {
+        if path.is_file() {
+            return path.to_path_buf();
+        }
+    }
+    if let Some(path) = face_image() {
+        return path;
+    }
+    for name in ["avatar-default", "user-identity", "user"] {
+        if let Some(path) = crate::desktop::resolve_icon_path(name) {
+            return path;
+        }
+    }
+    PathBuf::from("/usr/share/icons/breeze/actions/22/user.svg")
+}
+
+/// Best-effort AccountsService identity (UserName / RealName / IconFile).
+/// Falls back to passwd / `~/.face` when the service is missing.
+pub async fn account_identity() -> (String, String, PathBuf) {
+    if let Some((user, real, icon)) = accounts_service_user().await {
+        let id = if user.is_empty() { whoami() } else { user };
+        let name = if real.is_empty() {
+            real_name()
+        } else {
+            real
+        };
+        let image = account_image(icon.as_deref());
+        return (id, name, image);
+    }
+    (whoami(), real_name(), account_image(None))
+}
+
+async fn accounts_service_user() -> Option<(String, String, Option<PathBuf>)> {
+    let uid = unsafe { libc::geteuid() };
+    let conn = zbus::Connection::system().await.ok()?;
+    let path = format!("/org/freedesktop/Accounts/User{uid}");
+    let proxy = zbus::Proxy::new(
+        &conn,
+        "org.freedesktop.Accounts",
+        path.as_str(),
+        "org.freedesktop.Accounts.User",
+    )
+    .await
+    .ok()?;
+    let user_name: String = proxy.get_property("UserName").await.ok()?;
+    let real_name: String = proxy.get_property("RealName").await.unwrap_or_default();
+    let icon_file: String = proxy.get_property("IconFile").await.unwrap_or_default();
+    let icon = {
+        let trimmed = icon_file.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(trimmed))
+        }
+    };
+    Some((user_name, real_name, icon))
+}
+
 pub fn whoami() -> String {
     std::env::var("USER").unwrap_or_else(|_| {
         let uid = unsafe { libc::geteuid() };

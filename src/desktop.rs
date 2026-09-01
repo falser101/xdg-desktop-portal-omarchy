@@ -157,7 +157,7 @@ pub fn resolve_icon_path(icon: &str) -> Option<PathBuf> {
         for theme in ["hicolor", "Papirus", "Papirus-Dark", "breeze-dark", "breeze", "Adwaita"] {
             for size in sizes {
                 for ext in ["svg", "png"] {
-                    for kind in ["apps", "devices"] {
+                    for kind in ["apps", "devices", "actions", "status", "emblems"] {
                         let p = root
                             .join(theme)
                             .join(size)
