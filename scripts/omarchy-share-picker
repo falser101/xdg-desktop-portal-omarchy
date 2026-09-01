@@ -121,6 +121,8 @@ def capture_bin():
         return env
     here = os.path.dirname(os.path.abspath(__file__))
     candidates = [
+        "/usr/lib/omarchy-portal-capture",
+        "/usr/libexec/omarchy-portal-capture",
         os.path.expanduser("~/.local/libexec/omarchy-portal-capture"),
         os.path.join(here, "..", "target", "release", "omarchy-portal-capture"),
         os.path.join(here, "..", "target", "debug", "omarchy-portal-capture"),

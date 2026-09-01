@@ -58,22 +58,41 @@ Access 等交互对话框由本仓库实现。
 
 ## 构建与安装
 
+### 开发（用户目录）
+
 ```bash
 cargo build --release
 ./scripts/install-user.sh
 ```
 
-用户安装会写入：
+写入 `~/.local` / `~/.config`（daemon、截图助手、分享选择器、portal 路由、Quickshell 插件）。
 
-- `~/.local/libexec/xdg-desktop-portal-omarchy`
-- `~/.local/libexec/omarchy-portal-capture`
-- `~/.local/bin/omarchy-share-picker`
-- `~/.local/share/xdg-desktop-portal/portals/omarchy.portal`
-- `~/.config/xdg-desktop-portal/hyprland-portals.conf`
-- `~/.config/systemd/user/xdg-desktop-portal-omarchy.service`
-- `~/.config/omarchy/plugins/omarchy-portal/`（Quickshell UI）
+### 系统安装 / 打包
 
-需要时重启 portal / shell：
+```bash
+sudo ./scripts/install-system.sh
+# 或: make install-system PREFIX=/usr
+
+# 每个用户再跑一次会话配置：
+xdg-desktop-portal-omarchy-setup
+```
+
+系统路径：`/usr/lib/xdg-desktop-portal-omarchy`、`/usr/lib/omarchy-portal-capture`、`/usr/bin/omarchy-share-picker` 等。详见 [docs/packaging.md](docs/packaging.md)。
+
+### AUR（Arch）
+
+仓库内已有 git 包 PKGBUILD：
+
+- [`aur/xdg-desktop-portal-omarchy-git/`](aur/xdg-desktop-portal-omarchy-git/)
+
+```bash
+yay -S xdg-desktop-portal-omarchy-git   # 发布到 AUR 之后
+xdg-desktop-portal-omarchy-setup
+```
+
+如何把该 PKGBUILD 推上 aur.archlinux.org：见 [docs/packaging.md](docs/packaging.md)。
+
+### 安装后
 
 ```bash
 systemctl --user restart xdg-desktop-portal-omarchy xdg-desktop-portal xdg-desktop-portal-hyprland

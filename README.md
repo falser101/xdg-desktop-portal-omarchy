@@ -60,29 +60,49 @@ Details: [docs/portals/ScreenCast.en.md](docs/portals/ScreenCast.en.md).
 
 ## Build & install
 
+### Development (user-local)
+
 ```bash
 cargo build --release
 ./scripts/install-user.sh
 ```
 
-User install writes:
+Writes under `~/.local` and `~/.config` (daemon, capture helper, share picker, portal routing, Quickshell plugin).
 
-- `~/.local/libexec/xdg-desktop-portal-omarchy`
-- `~/.local/libexec/omarchy-portal-capture`
-- `~/.local/bin/omarchy-share-picker`
-- `~/.local/share/xdg-desktop-portal/portals/omarchy.portal`
-- `~/.config/xdg-desktop-portal/hyprland-portals.conf`
-- `~/.config/systemd/user/xdg-desktop-portal-omarchy.service`
-- `~/.config/omarchy/plugins/omarchy-portal/` (Quickshell UI)
+### System package / packaging
 
-Then restart portals / shell if needed:
+```bash
+# Install into PREFIX (default /usr). Use DESTDIR for packaging roots.
+sudo ./scripts/install-system.sh
+# or: make install-system PREFIX=/usr
+
+# Each user then wires session config + Omarchy plugin:
+xdg-desktop-portal-omarchy-setup
+```
+
+System layout: `/usr/lib/xdg-desktop-portal-omarchy`, `/usr/lib/omarchy-portal-capture`, `/usr/bin/omarchy-share-picker`, portals + systemd user unit under `/usr/share` and `/usr/lib/systemd/user`. Details: [docs/packaging.md](docs/packaging.md).
+
+### AUR (Arch)
+
+PKGBUILD for the git package lives in-repo:
+
+- [`aur/xdg-desktop-portal-omarchy-git/`](aur/xdg-desktop-portal-omarchy-git/)
+
+```bash
+yay -S xdg-desktop-portal-omarchy-git   # once published
+xdg-desktop-portal-omarchy-setup
+```
+
+How to publish that PKGBUILD to aur.archlinux.org: see [docs/packaging.md](docs/packaging.md).
+
+### After install
 
 ```bash
 systemctl --user restart xdg-desktop-portal-omarchy xdg-desktop-portal xdg-desktop-portal-hyprland
-omarchy restart shell
+omarchy restart shell   # Omarchy: reload Quickshell plugin
 ```
 
-On Omarchy, `XDG_CURRENT_DESKTOP=Hyprland`, so `hyprland-portals.conf` is the file that is consulted.
+On Omarchy, `XDG_CURRENT_DESKTOP=Hyprland`, so `~/.config/xdg-desktop-portal/hyprland-portals.conf` is the file that is consulted.
 
 ## Demo (no D-Bus)
 
