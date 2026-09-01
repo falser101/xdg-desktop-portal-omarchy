@@ -1,1 +1,6 @@
 /target
+aur/*/pkg/
+aur/*/src/
+aur/*/xdg-desktop-portal-omarchy/
+aur/*/*.pkg.tar.zst
+aur/*/*.pkg.tar.zst.sig

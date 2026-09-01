@@ -15,6 +15,9 @@ install-system: release
 install-user: release
 	./scripts/install-user.sh
 
+uninstall-user:
+	./scripts/uninstall-user.sh
+
 setup-user:
 	./scripts/setup-user.sh
 
