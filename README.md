@@ -1,5 +1,7 @@
 # xdg-desktop-portal-omarchy
 
+[中文](README.zh-CN.md)
+
 Omarchy backend for [xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/).
 
 This is not a GTK theme. It implements `org.freedesktop.impl.portal.*` on
@@ -7,39 +9,56 @@ This is not a GTK theme. It implements `org.freedesktop.impl.portal.*` on
 Flatpak, and host apps talk to for file pickers, appearance settings, and
 related desktop integration.
 
-ScreenCast / GlobalShortcuts / InputCapture stay on
-`xdg-desktop-portal-hyprland` (PipeWire / Hyprland protocols). The share
-picker itself is Omarchy-styled (`omarchy-share-picker`). Screenshot,
-FileChooser, and the rest of the GTK half are this backend.
+**Capture-heavy portals** (ScreenCast / GlobalShortcuts / InputCapture) stay on
+`xdg-desktop-portal-hyprland` (PipeWire / Hyprland protocols). The **share
+picker UI** is Omarchy-styled (`omarchy-share-picker` + Quickshell plugin).
+Screenshot, FileChooser, Access, and the rest of the interactive half live in
+this backend.
 
-**Implemented vs not:** [docs/STATUS.md](docs/STATUS.md)（总表）+ [docs/portals/](docs/portals/)（每个 portal 单独记录已完成与延后项，含对照 KDE）。
+**Status index:** [docs/STATUS.md](docs/STATUS.md) (English) · [docs/STATUS.zh-CN.md](docs/STATUS.zh-CN.md) (中文)  
+**Per-portal notes:** [docs/portals/](docs/portals/)
 
 ## Interfaces
 
 | Interface | Status | Notes |
 |-----------|--------|-------|
-| FileChooser | done | [docs/portals/FileChooser.md](docs/portals/FileChooser.md) — Open/Save/Recent/choices；延后 parent_window / 沙箱路径 / KIO |
-| Settings | done | [docs/portals/Settings.md](docs/portals/Settings.md) |
-| AppChooser | done | [docs/portals/AppChooser.md](docs/portals/AppChooser.md) |
-| Account | done | [docs/portals/Account.md](docs/portals/Account.md) |
-| Access | done | [docs/portals/Access.md](docs/portals/Access.md) |
-| Notification | done | [docs/portals/Notification.md](docs/portals/Notification.md) |
-| Inhibit | done | [docs/portals/Inhibit.md](docs/portals/Inhibit.md) |
-| Email | done | [docs/portals/Email.md](docs/portals/Email.md) |
-| Wallpaper | done | [docs/portals/Wallpaper.md](docs/portals/Wallpaper.md) |
-| Screenshot | done | [docs/portals/Screenshot.md](docs/portals/Screenshot.md) |
-| Background | done | [docs/portals/Background.md](docs/portals/Background.md) |
-| DynamicLauncher | done | [docs/portals/DynamicLauncher.md](docs/portals/DynamicLauncher.md) |
-| Lockdown | stub | [docs/portals/Lockdown.md](docs/portals/Lockdown.md) |
-| ScreenCast | delegated | [docs/portals/ScreenCast.md](docs/portals/ScreenCast.md) — hyprland capture + Omarchy preview picker |
-| GlobalShortcuts | delegated | [docs/portals/GlobalShortcuts.md](docs/portals/GlobalShortcuts.md) |
-| InputCapture | delegated | [docs/portals/InputCapture.md](docs/portals/InputCapture.md) |
-| Secret | delegated | [docs/portals/Secret.md](docs/portals/Secret.md) |
-| Print | **not implemented** | [docs/portals/Print.md](docs/portals/Print.md) |
-| RemoteDesktop | **not implemented** | [docs/portals/RemoteDesktop.md](docs/portals/RemoteDesktop.md) |
+| FileChooser | done | [FileChooser](docs/portals/FileChooser.md) |
+| Settings | done | [Settings](docs/portals/Settings.md) |
+| AppChooser | done | [AppChooser](docs/portals/AppChooser.md) |
+| Account | done | [Account](docs/portals/Account.md) |
+| Access | done | [Access](docs/portals/Access.md) |
+| Notification | done | [Notification](docs/portals/Notification.md) |
+| Inhibit | done | [Inhibit](docs/portals/Inhibit.md) |
+| Email | done | [Email](docs/portals/Email.md) |
+| Wallpaper | done | [Wallpaper](docs/portals/Wallpaper.md) |
+| Screenshot | done | [Screenshot](docs/portals/Screenshot.md) |
+| Background | done | [Background](docs/portals/Background.md) |
+| DynamicLauncher | done | [DynamicLauncher](docs/portals/DynamicLauncher.md) |
+| Lockdown | stub | [Lockdown](docs/portals/Lockdown.md) |
+| ScreenCast | delegated + Omarchy picker | [ScreenCast](docs/portals/ScreenCast.en.md) · [中文](docs/portals/ScreenCast.md) |
+| GlobalShortcuts | delegated | [GlobalShortcuts](docs/portals/GlobalShortcuts.md) |
+| InputCapture | delegated | [InputCapture](docs/portals/InputCapture.md) |
+| Secret | delegated | [Secret](docs/portals/Secret.md) |
+| Print | **not implemented** | [Print](docs/portals/Print.md) |
+| RemoteDesktop | **not implemented** | [RemoteDesktop](docs/portals/RemoteDesktop.md) |
 | Clipboard / Usb | **not implemented** | [Clipboard](docs/portals/Clipboard.md) / [Usb](docs/portals/Usb.md) |
 
-## Build
+## ScreenCast share picker (Omarchy)
+
+Capture stays on Hyprland; UI is `scripts/omarchy-share-picker` →
+`SharePickerDialog.qml`, registered as `custom_picker_binary` in `xdph.conf`.
+
+- **Top bar:** `Share region` · monitor chips (multi-monitor filter) · search
+- **Body:** Displays grid → “Windows” separator → Windows grid  
+  Responsive columns (~≥260px per tile, 1–6). Same card chrome for displays and windows.
+- **Thumbnails:** displays via `grim -o`; windows via `omarchy-portal-capture` (`hyprland_toplevel_export_v1`)
+- **Selection:** first item selected by default; ↑↓←→ move; Enter / **Share** confirm; click select, double-click confirm
+- **Footer (KDE-aligned):** left — *Allow the application to do this without asking next time*; right — Cancel / Share
+- **Scrollbar:** right-edge gutter (does not overlay previews); mouse wheel works
+
+Details: [docs/portals/ScreenCast.en.md](docs/portals/ScreenCast.en.md).
+
+## Build & install
 
 ```bash
 cargo build --release
@@ -49,12 +68,21 @@ cargo build --release
 User install writes:
 
 - `~/.local/libexec/xdg-desktop-portal-omarchy`
+- `~/.local/libexec/omarchy-portal-capture`
+- `~/.local/bin/omarchy-share-picker`
 - `~/.local/share/xdg-desktop-portal/portals/omarchy.portal`
 - `~/.config/xdg-desktop-portal/hyprland-portals.conf`
 - `~/.config/systemd/user/xdg-desktop-portal-omarchy.service`
+- `~/.config/omarchy/plugins/omarchy-portal/` (Quickshell UI)
 
-Then restart `xdg-desktop-portal`. `XDG_CURRENT_DESKTOP=Hyprland` on Omarchy,
-so the Hyprland portals.conf is the file that is consulted.
+Then restart portals / shell if needed:
+
+```bash
+systemctl --user restart xdg-desktop-portal-omarchy xdg-desktop-portal xdg-desktop-portal-hyprland
+omarchy restart shell
+```
+
+On Omarchy, `XDG_CURRENT_DESKTOP=Hyprland`, so `hyprland-portals.conf` is the file that is consulted.
 
 ## Demo (no D-Bus)
 

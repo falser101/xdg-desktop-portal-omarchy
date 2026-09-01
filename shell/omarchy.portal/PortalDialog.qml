@@ -16,6 +16,8 @@ BorderSurface {
   property bool showButtons: true
   property int selectedIndex: 1
   default property alias body: bodySlot.data
+  // Optional left-side footer content (same row as Cancel / Accept).
+  property alias footerLeft: footerLeftSlot.data
   property real cardWidth: Math.min(Style.space(560), (parent ? parent.width : 800) - Style.gapsOut * 4)
   property real cardHeight: Math.min(Style.space(520), (parent ? parent.height : 600) - Style.gapsOut * 4)
 
@@ -81,24 +83,40 @@ BorderSurface {
       Layout.fillHeight: true
     }
 
-    Row {
-      visible: root.showButtons
-      Layout.alignment: Qt.AlignRight
+    RowLayout {
+      visible: root.showButtons || footerLeftSlot.children.length > 0
+      Layout.fillWidth: true
       spacing: Style.space(10)
 
-      Repeater {
-        model: [root.cancelText, root.acceptText]
-        Button {
-          required property int index
-          required property string modelData
-          text: modelData
-          selected: root.selectedIndex === index
-          bordered: true
-          enabled: index === 0 || root.acceptable
-          onClicked: {
-            root.selectedIndex = index
-            if (index === 0) root.rejected()
-            else root.accepted()
+      Row {
+        id: footerLeftSlot
+        spacing: Style.space(10)
+        Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
+      }
+
+      Item {
+        Layout.fillWidth: true
+      }
+
+      Row {
+        visible: root.showButtons
+        Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+        spacing: Style.space(10)
+
+        Repeater {
+          model: [root.cancelText, root.acceptText]
+          Button {
+            required property int index
+            required property string modelData
+            text: modelData
+            selected: root.selectedIndex === index
+            bordered: true
+            enabled: index === 0 || root.acceptable
+            onClicked: {
+              root.selectedIndex = index
+              if (index === 0) root.rejected()
+              else root.accepted()
+            }
           }
         }
       }

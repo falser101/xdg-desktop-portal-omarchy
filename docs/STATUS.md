@@ -1,72 +1,82 @@
-# 实现状态
+# Implementation status
 
-应用（Firefox、Chromium、Flatpak 等）只跟前端 `xdg-desktop-portal` 说话。本仓库实现的是后端 `org.freedesktop.impl.portal.desktop.omarchy`。Hyprland 上实际生效的路由文件是：
+[中文](STATUS.zh-CN.md)
+
+Apps (Firefox, Chromium, Flatpak, …) talk only to the frontend
+`xdg-desktop-portal`. This repo implements the backend
+`org.freedesktop.impl.portal.desktop.omarchy`. On Hyprland the effective routing
+file is:
 
 ```
 ~/.config/xdg-desktop-portal/hyprland-portals.conf
 ```
 
-对应源文件：`data/omarchy-portals.conf`。
+Source: `data/omarchy-portals.conf`.
 
-每个接口的**已完成 / 延后 / 对照 KDE**细节单独记在 [`docs/portals/`](portals/) 下，改某一 portal 时只改对应文件。
+Per-interface **done / deferred / vs KDE** notes live under
+[`docs/portals/`](portals/). Edit only the file for the portal you change.
 
-## 架构
+## Architecture
 
-| 层 | 作用 |
-|----|------|
-| Rust daemon `xdg-desktop-portal-omarchy` | D-Bus 后端：导出 `org.freedesktop.impl.portal.*` |
-| Quickshell 插件 `omarchy-portal` | 对话框 UI（装在 `~/.config/omarchy/plugins/omarchy-portal/`） |
-| `omarchy-share-picker` | 给 hyprland ScreenCast 用的自定义分享选择器 |
-| egui `--picker` 子进程 | shell 插件不可用时的后备对话框 |
+| Layer | Role |
+|-------|------|
+| Rust daemon `xdg-desktop-portal-omarchy` | D-Bus backend: export `org.freedesktop.impl.portal.*` |
+| Quickshell plugin `omarchy-portal` | Dialog UI (`~/.config/omarchy/plugins/omarchy-portal/`) |
+| `omarchy-share-picker` | Custom share picker for hyprland ScreenCast |
+| `omarchy-portal-capture` | Window thumbnails via `hyprland_toplevel_export_v1` |
+| egui `--picker` subprocess | Fallback when the shell plugin is unavailable |
 
-对话框优先 `omarchy-shell shell summon omarchy-portal`。窗口是 Quickshell `FloatingWindow`（居中卡片），不是全屏 layer-shell。
+Dialogs prefer `omarchy-shell shell summon omarchy-portal`. Windows are Quickshell
+`FloatingWindow` (centered card), not fullscreen layer-shell.
 
 ```
-应用
-  → xdg-desktop-portal（前端）
-    → omarchy（本仓库）
-    → hyprland（ScreenCast / GlobalShortcuts / InputCapture）
-    → gnome-keyring（Secret）
-    → gtk（兜底）
+App
+  → xdg-desktop-portal (frontend)
+    → omarchy (this repo)
+    → hyprland (ScreenCast / GlobalShortcuts / InputCapture)
+    → gnome-keyring (Secret)
+    → gtk (fallback)
 ```
 
-## 对照表
+## Matrix
 
-| 接口 | 状态 | 文档 |
-|------|------|------|
-| FileChooser | 已实现 | [portals/FileChooser.md](portals/FileChooser.md) |
-| Settings | 已实现 | [portals/Settings.md](portals/Settings.md) |
-| AppChooser | 已实现（含设为默认 → mimeapps） | [portals/AppChooser.md](portals/AppChooser.md) |
-| Account | 已实现 | [portals/Account.md](portals/Account.md) |
-| Access | 已实现（choices / icon） | [portals/Access.md](portals/Access.md) |
-| Notification | 已实现 | [portals/Notification.md](portals/Notification.md) |
-| Inhibit | 已实现 | [portals/Inhibit.md](portals/Inhibit.md) |
-| Email | 已实现 | [portals/Email.md](portals/Email.md) |
-| Wallpaper | 已实现 | [portals/Wallpaper.md](portals/Wallpaper.md) |
-| Lockdown | 桩 | [portals/Lockdown.md](portals/Lockdown.md) |
-| Screenshot | 已实现 | [portals/Screenshot.md](portals/Screenshot.md) |
-| Background | 已实现 | [portals/Background.md](portals/Background.md) |
-| DynamicLauncher | 已实现 | [portals/DynamicLauncher.md](portals/DynamicLauncher.md) |
-| ScreenCast | 委托 + 预览选择器（grim 缩略图） | [portals/ScreenCast.md](portals/ScreenCast.md) |
-| GlobalShortcuts | 委托 | [portals/GlobalShortcuts.md](portals/GlobalShortcuts.md) |
-| InputCapture | 委托 | [portals/InputCapture.md](portals/InputCapture.md) |
-| Secret | 委托 | [portals/Secret.md](portals/Secret.md) |
-| Print | 未实现 | [portals/Print.md](portals/Print.md) |
-| RemoteDesktop | 未实现 | [portals/RemoteDesktop.md](portals/RemoteDesktop.md) |
-| Clipboard | 未实现 | [portals/Clipboard.md](portals/Clipboard.md) |
-| Usb | 未实现 | [portals/Usb.md](portals/Usb.md) |
+| Interface | Status | Doc |
+|-----------|--------|-----|
+| FileChooser | done | [portals/FileChooser.md](portals/FileChooser.md) |
+| Settings | done | [portals/Settings.md](portals/Settings.md) |
+| AppChooser | done (set default → mimeapps) | [portals/AppChooser.md](portals/AppChooser.md) |
+| Account | done | [portals/Account.md](portals/Account.md) |
+| Access | done (choices / icon) | [portals/Access.md](portals/Access.md) |
+| Notification | done | [portals/Notification.md](portals/Notification.md) |
+| Inhibit | done | [portals/Inhibit.md](portals/Inhibit.md) |
+| Email | done | [portals/Email.md](portals/Email.md) |
+| Wallpaper | done | [portals/Wallpaper.md](portals/Wallpaper.md) |
+| Lockdown | stub | [portals/Lockdown.md](portals/Lockdown.md) |
+| Screenshot | done | [portals/Screenshot.md](portals/Screenshot.md) |
+| Background | done | [portals/Background.md](portals/Background.md) |
+| DynamicLauncher | done | [portals/DynamicLauncher.md](portals/DynamicLauncher.md) |
+| ScreenCast | delegated + Omarchy preview picker | [ScreenCast.en.md](portals/ScreenCast.en.md) · [中文](portals/ScreenCast.md) |
+| GlobalShortcuts | delegated | [portals/GlobalShortcuts.md](portals/GlobalShortcuts.md) |
+| InputCapture | delegated | [portals/InputCapture.md](portals/InputCapture.md) |
+| Secret | delegated | [portals/Secret.md](portals/Secret.md) |
+| Print | not implemented | [portals/Print.md](portals/Print.md) |
+| RemoteDesktop | not implemented | [portals/RemoteDesktop.md](portals/RemoteDesktop.md) |
+| Clipboard | not implemented | [portals/Clipboard.md](portals/Clipboard.md) |
+| Usb | not implemented | [portals/Usb.md](portals/Usb.md) |
 
-Location、Camera、Trash、NetworkMonitor 等前端有、常见桌面很少自实现的 impl：没有单独文档，除非有应用卡住再补。
+Location, Camera, Trash, NetworkMonitor, etc. exist on the frontend but are
+rarely implemented by desktops; no dedicated notes unless an app gets stuck.
 
-## 优先延后项（跨 portal）
+## Cross-portal deferred
 
-多数对话框共用：
+Shared by most dialogs:
 
-- **`parent_window` + `modal`**：KDE 会附着调用方窗口；Omarchy 当前独立 `FloatingWindow`。
+- **`parent_window` + `modal`:** KDE attaches to the caller; Omarchy currently uses a standalone `FloatingWindow`.
 
-FileChooser 专属延后见 [portals/FileChooser.md](portals/FileChooser.md)（沙箱路径还原、KIO、列表语义等）。
+FileChooser-only deferred items: [portals/FileChooser.md](portals/FileChooser.md)
+(sandbox path restore, KIO, list semantics, …).
 
-## 自测
+## Self-test
 
 ```bash
 python3 scripts/portal-call.py settings
@@ -83,4 +93,5 @@ cargo run -- --demo file-chooser
 cargo run -- --demo access
 ```
 
-安装：`./scripts/install-user.sh`。插件改完若 keepLoaded 没热更新：`omarchy restart shell`。
+Install: `./scripts/install-user.sh`.  
+After plugin edits (if `keepLoaded` does not hot-reload): `omarchy restart shell`.
