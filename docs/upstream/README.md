@@ -22,7 +22,6 @@ Assets and drafts for offering this project to Omarchy as an **external package*
 | `app-chooser.png` | done | AppChooser |
 | `share-picker.png` | done | Omarchy ScreenCast picker |
 | `*-fullscreen.png` | done | Same moments, full monitor |
-| `stock-hyprland-preview-share-picker.png` | done | Stock picker (layer-shell); for side-by-side with `share-picker.png` |
 
 ## How to re-capture
 

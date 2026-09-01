@@ -1,7 +1,6 @@
 # RemoteDesktop
 
 状态：**未实现**  
-对照：KDE RemoteDesktop（KWin 输入注入）
 
 ## 延后
 

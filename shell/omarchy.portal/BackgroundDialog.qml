@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 
-// KDE Background uses a notification with Allow / Deny (+ Allow once when
+// Background prompt: Allow / Deny (+ Allow once when
  // dismissed). Omarchy toasts cannot show action buttons, so we surface the
  // same three outcomes in a dialog.
 PortalDialog {
@@ -27,7 +27,7 @@ PortalDialog {
 
   function handleKey(event) {
     if (event.key === Qt.Key_Escape) {
-      // Match KDE: dismiss without choosing → Allow once
+      // Dismiss without choosing → Allow once
       root.pick(2)
       return true
     }

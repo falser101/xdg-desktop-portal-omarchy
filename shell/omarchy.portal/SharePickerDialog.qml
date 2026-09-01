@@ -7,10 +7,10 @@ import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 
-// Layout aligned with xdg-desktop-portal-kde ScreenChooserDialog:
+// Omarchy share-picker layout:
 // header chips + search → Displays grid → "Windows" separator → window cards.
 // Selection: default first item; arrows move; Enter / Share confirms.
-// Previews: Quickshell ScreencopyView (live compositor capture), like KDE's
+// Previews: Quickshell ScreencopyView (live compositor capture), from the compositor.
 // PipeWireSourceItem — dialog opens immediately; no grim/PNG prefetch.
 PortalDialog {
   id: root
@@ -910,7 +910,7 @@ PortalDialog {
     }
   }
 
-  // KDE-style: restore checkbox on the left of Cancel / Share.
+  // Restore checkbox on the left of Cancel / Share.
   footerLeft: Row {
     spacing: Style.space(8)
 

@@ -25,7 +25,7 @@ This also helps the FileChooser / GTK portal timeout class of bugs (e.g. [#7944]
 | ScreenCast **share picker UI** | `omarchy-share-picker` via `custom_picker_binary` in `xdph.conf` |
 | Secret | still `gnome-keyring` |
 
-UI matches Omarchy shell theming (not GTK). Share picker is KDE-aligned (displays + windows, region, allow-once token, live window previews via `hyprland_toplevel_export_v1`).
+UI matches Omarchy shell theming (not GTK). Share picker: displays + windows, region, allow-once token, live window previews via `hyprland_toplevel_export_v1`.
 
 ## Why not a monorepo PR
 
@@ -65,7 +65,6 @@ Attach from `docs/upstream/assets/` in the repo (or the copies below after push)
 | `access.png` | Access dialog |
 | `app-chooser.png` | AppChooser |
 | `share-picker.png` | Omarchy ScreenCast share picker (live previews) |
-| `stock-hyprland-preview-share-picker.png` | Stock picker comparison (if present) |
 
 ## Status / gaps (honest)
 

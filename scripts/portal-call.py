@@ -713,7 +713,7 @@ def main() -> int:
                     "meaning": {0: "allowed (no dialog)", 2: "denied"}.get(
                         int(code), "other"
                     ),
-                    "hint": "Try --app-id org.kde.discover (allowed) vs org.omarchy.portal.test (denied)",
+                    "hint": "Try --app-id org.freedesktop.portal.test (or an allowed id) vs org.omarchy.portal.test (denied)",
                 }
             )
         )

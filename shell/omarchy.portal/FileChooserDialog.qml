@@ -979,85 +979,27 @@ PortalDialog {
       }
     }
 
+    // Save keeps choices/filters on their own row above the filename field.
     RowLayout {
       Layout.fillWidth: true
       Layout.preferredHeight: root.footerBarHeight
       spacing: Style.spacing.md
-      visible: root.choices.length > 0 || root.filters.length > 0
+      visible: root.saveMode && (root.choices.length > 0 || root.filters.length > 0)
 
-      Repeater {
-        model: root.choices
-        delegate: Row {
-          required property var modelData
-          spacing: Style.spacing.sm
-          height: root.footerBarHeight
-          Text {
-            visible: root.choiceHasOptions(modelData)
-            anchors.verticalCenter: parent.verticalCenter
-            text: String(modelData.label || modelData.id)
-            color: root.contentText
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-          }
-          UpDropdown {
-            visible: root.choiceHasOptions(modelData)
-            width: Style.space(160)
-            height: root.footerBarHeight
-            showLabel: false
-            rowHeight: root.footerBarHeight
-            value: String(root.choiceValues[String(modelData.id)] || modelData.selected || "")
-            options: root.choiceOptions(modelData)
-            onChanged: function(v) {
-              var next = Object.assign({}, root.choiceValues)
-              next[String(modelData.id)] = v
-              root.choiceValues = next
-            }
-          }
-          Text {
-            visible: !root.choiceHasOptions(modelData)
-            anchors.verticalCenter: parent.verticalCenter
-            text: String(modelData.label || modelData.id)
-            color: root.contentText
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-          }
-          ToggleSwitch {
-            visible: !root.choiceHasOptions(modelData)
-            anchors.verticalCenter: parent.verticalCenter
-            checked: String(root.choiceValues[String(modelData.id)] || modelData.selected) === "true"
-            onToggled: {
-              var next = Object.assign({}, root.choiceValues)
-              next[String(modelData.id)] = checked ? "false" : "true"
-              root.choiceValues = next
-            }
-          }
-        }
-      }
-
-      UpDropdown {
-        visible: root.filters.length > 0
-        Layout.preferredWidth: Style.space(200)
-        Layout.preferredHeight: root.footerBarHeight
-        showLabel: false
-        rowHeight: root.footerBarHeight
-        value: String(root.filterIndex)
-        options: {
-          var out = []
-          for (var i = 0; i < root.filters.length; i++)
-            out.push({ value: String(i), label: String(root.filters[i].label || "Filter") })
-          return out
-        }
-        onChanged: function(v) { root.filterIndex = Number(v) }
-      }
-
+      FooterChoicesFilters { }
       Item { Layout.fillWidth: true }
     }
 
+    // Open: choices/filters + Cancel/Open on one row.
+    // Save: filename field + Cancel/Save (choices stay on the row above).
     RowLayout {
       Layout.fillWidth: true
       Layout.preferredHeight: root.footerBarHeight
       spacing: Style.spacing.sm
 
+      FooterChoicesFilters {
+        visible: !root.saveMode && (root.choices.length > 0 || root.filters.length > 0)
+      }
       TextField {
         Layout.fillWidth: true
         Layout.preferredHeight: root.footerBarHeight
@@ -1092,6 +1034,76 @@ PortalDialog {
           if (root.acceptable) root.accepted()
         }
       }
+    }
+  }
+
+  component FooterChoicesFilters: Row {
+    spacing: Style.spacing.md
+    height: root.footerBarHeight
+
+    Repeater {
+      model: root.choices
+      delegate: Row {
+        required property var modelData
+        spacing: Style.spacing.sm
+        height: root.footerBarHeight
+        Text {
+          visible: root.choiceHasOptions(modelData)
+          anchors.verticalCenter: parent.verticalCenter
+          text: String(modelData.label || modelData.id)
+          color: root.contentText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+        UpDropdown {
+          visible: root.choiceHasOptions(modelData)
+          width: Style.space(160)
+          height: root.footerBarHeight
+          showLabel: false
+          rowHeight: root.footerBarHeight
+          value: String(root.choiceValues[String(modelData.id)] || modelData.selected || "")
+          options: root.choiceOptions(modelData)
+          onChanged: function(v) {
+            var next = Object.assign({}, root.choiceValues)
+            next[String(modelData.id)] = v
+            root.choiceValues = next
+          }
+        }
+        Text {
+          visible: !root.choiceHasOptions(modelData)
+          anchors.verticalCenter: parent.verticalCenter
+          text: String(modelData.label || modelData.id)
+          color: root.contentText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+        }
+        ToggleSwitch {
+          visible: !root.choiceHasOptions(modelData)
+          anchors.verticalCenter: parent.verticalCenter
+          checked: String(root.choiceValues[String(modelData.id)] || modelData.selected) === "true"
+          onToggled: {
+            var next = Object.assign({}, root.choiceValues)
+            next[String(modelData.id)] = checked ? "false" : "true"
+            root.choiceValues = next
+          }
+        }
+      }
+    }
+
+    UpDropdown {
+      visible: root.filters.length > 0
+      width: Style.space(200)
+      height: root.footerBarHeight
+      showLabel: false
+      rowHeight: root.footerBarHeight
+      value: String(root.filterIndex)
+      options: {
+        var out = []
+        for (var i = 0; i < root.filters.length; i++)
+          out.push({ value: String(i), label: String(root.filters[i].label || "Filter") })
+        return out
+      }
+      onChanged: function(v) { root.filterIndex = Number(v) }
     }
   }
 

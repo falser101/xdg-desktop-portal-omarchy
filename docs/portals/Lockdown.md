@@ -1,7 +1,6 @@
 # Lockdown
 
 状态：**桩（stub）**  
-对照：KDE Lockdown（策略属性）  
 源码：`src/portals/lockdown.rs`
 
 ## 已完成

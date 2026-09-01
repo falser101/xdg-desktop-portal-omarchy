@@ -17,7 +17,7 @@ const ALLOW_ONCE: u32 = 2;
 
 pub struct Background {
     ctx: PortalCtx,
-    /// app_ids that already got a Background prompt this session (KDE dedupe → Allow once).
+    /// app_ids that already got a Background prompt this session (dedupe → Allow once).
     warned: Arc<Mutex<HashSet<String>>>,
 }
 
@@ -57,7 +57,7 @@ impl Background {
     ) -> PortalResponse<NotifyOut> {
         tracing::info!(app_id, name, "Background.NotifyBackground");
 
-        // KDE only suppresses while a prompt for this app is still open; after
+        // Only suppress while a prompt for this app is still open; after
         // it closes the app can be asked again. Keeping the id forever made
         // every subsequent test return Allow once with no dialog.
         if !app_id.is_empty() {
@@ -106,7 +106,7 @@ impl Background {
                 Some(PickerReply::Confirm { accepted: false }) => FORBID,
                 Some(PickerReply::Access(r)) if r.granted => ALLOW,
                 Some(PickerReply::Access(_)) => FORBID,
-                // Close without choosing → Allow once (KDE notification dismiss).
+                // Close without choosing → Allow once.
                 Some(PickerReply::Cancel) | None => ALLOW_ONCE,
                 other => {
                     tracing::warn!(?other, "Background: unexpected picker reply; Allow once");
@@ -180,7 +180,7 @@ fn app_states() -> HashMap<String, OwnedValue> {
         if client.get("mapped").and_then(|v| v.as_bool()) == Some(false) {
             continue;
         }
-        // KDE: Background=0, Running=1, Active=2
+        // Spec: Background=0, Running=1, Active=2
         let state: u32 = if active.as_deref() == Some(class) {
             2
         } else {
@@ -211,7 +211,7 @@ fn write_autostart(app_id: &str, enable: bool, commandline: &[String], flags: u3
     let path = dir.join(format!("{safe}.desktop"));
     if !enable {
         let _ = std::fs::remove_file(&path);
-        // Spec / KDE: return whether the app will be autostarted afterwards.
+        // Spec: return whether the app will be autostarted afterwards.
         return false;
     }
     if commandline.is_empty() {
@@ -229,7 +229,7 @@ fn write_autostart(app_id: &str, enable: bool, commandline: &[String], flags: u3
     if activatable {
         body.push_str("DBusActivatable=true\n");
     }
-    // KDE always stamps Flatpak id for portal-requested autostart entries.
+    // Stamp Flatpak id for portal-requested autostart entries.
     body.push_str(&format!("X-Flatpak={app_id}\n"));
     match std::fs::File::create(&path) {
         Ok(mut f) => f.write_all(body.as_bytes()).is_ok(),

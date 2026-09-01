@@ -1,7 +1,6 @@
 # GlobalShortcuts
 
 状态：**委托** → `xdg-desktop-portal-hyprland`  
-对照：KDE GlobalShortcuts
 
 ## 已完成
 

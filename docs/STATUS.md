@@ -13,7 +13,7 @@ file is:
 
 Source: `data/omarchy-portals.conf`.
 
-Per-interface **done / deferred / vs KDE** notes live under
+Per-interface **done / deferred** notes live under
 [`docs/portals/`](portals/). Edit only the file for the portal you change.
 
 ## Architecture
@@ -45,7 +45,7 @@ App
 | FileChooser | done | [portals/FileChooser.md](portals/FileChooser.md) |
 | Settings | done | [portals/Settings.md](portals/Settings.md) |
 | AppChooser | done (set default → mimeapps) | [portals/AppChooser.md](portals/AppChooser.md) |
-| Account | done (KDE UserInfoDialog layout) | [portals/Account.md](portals/Account.md) |
+| Account | done | [portals/Account.md](portals/Account.md) |
 | Access | done (choices / icon) | [portals/Access.md](portals/Access.md) |
 | Notification | done (bridge → FDO; actions / icon / persistent) | [portals/Notification.md](portals/Notification.md) |
 | Inhibit | done | [portals/Inhibit.md](portals/Inhibit.md) |
@@ -71,10 +71,10 @@ rarely implemented by desktops; no dedicated notes unless an app gets stuck.
 
 Shared by most dialogs:
 
-- **`parent_window` + `modal`:** KDE attaches to the caller; Omarchy currently uses a standalone `FloatingWindow`.
+- **`parent_window` + `modal`:** currently a standalone `FloatingWindow`, not attached to the caller.
 
 FileChooser-only deferred items: [portals/FileChooser.md](portals/FileChooser.md)
-(sandbox path restore, KIO, list semantics, …).
+(sandbox path restore, list semantics, …).
 
 ## Self-test
 

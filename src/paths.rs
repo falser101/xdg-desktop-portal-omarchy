@@ -194,7 +194,7 @@ pub fn face_image() -> Option<PathBuf> {
 }
 
 /// Avatar path for Account portal: prefer an existing face file, else a
-/// themed user/avatar icon (KDE always returns a displayable image URI).
+/// themed user/avatar icon; always return a displayable image URI.
 pub fn account_image(preferred: Option<&Path>) -> PathBuf {
     if let Some(path) = preferred {
         if path.is_file() {

@@ -9,6 +9,7 @@ use zbus::zvariant::{ObjectPath, OwnedValue, SerializeDict, Structure, Type, Val
 
 pub struct DynamicLauncher(pub PortalCtx);
 
+// Common software-center app ids that may request a launcher token.
 const ALLOWED_TOKEN_APPS: &[&str] = &[
     "org.gnome.Software",
     "org.gnome.SoftwareDevel",

@@ -1,7 +1,6 @@
 # FileChooser
 
 状态：**已实现**（日常本机 Open/Save 可用）  
-对照：`xdg-desktop-portal-kde` → `KFileWidget`  
 源码：`src/portals/file_chooser.rs`、`src/documents.rs`、`shell/omarchy.portal/FileChooserDialog.qml`、`src/ui/file_chooser.rs`（egui 后备）
 
 ## 已完成
@@ -18,23 +17,23 @@
 - UI：`Color.popups` / `Color.menu` 选中态，与 launcher 一致
 - **沙箱路径还原（Documents）**：`/run/user/…/doc/…` → `GetMountPoint` + `Info` 宿主路径；相对 `current_folder` 忽略；不存在的绝对路径上溯父目录
 
-## 延后（未对齐 KDE）
+## 延后
 
 1. **`parent_window` + `modal`**（跨 portal）  
-   KDE 用 `Utils::setParentWindow`；Omarchy 独立 `FloatingWindow`。
+   当前独立 `FloatingWindow`，未附着调用方窗口。
 
-2. **网络 / 非本地路径（KIO）**  
-   smb/sftp/trash、远程书签。**刻意不做整棵 KIO**。
+2. **网络 / 非本地路径**  
+   smb/sftp/trash、远程书签。不做远程 VFS。
 
-3. **KIOFuse outbound**  
-   KDE 可选把返回 URI 经 KIOFuse 重挂；Omarchy 只做 Documents 入向还原。
+3. **出站沙箱路径重挂**  
+   只做 Documents 入向还原，不把返回 URI 再挂回沙箱 fuse。
 
 4. **Recent 数据源 / choices 视觉**（可选）  
-   xbel vs KDE recent-docs；choices 自绘一行即可。
+   目前用 `recently-used.xbel`；choices 自绘一行即可。
 
-## 刻意不必对齐
+## 超集
 
-- **SaveFiles**：规范有，KDE 桌面端基本不实现；Omarchy 已有，算超集。
+- **SaveFiles**：规范有；本后端已实现。
 
 ## 自测
 

@@ -1,14 +1,13 @@
 # Settings
 
 状态：**已实现**（标准 `org.freedesktop.appearance` 够用）  
-对照：`xdg-desktop-portal-kde` → `src/settings.cpp`  
 源码：`src/portals/settings.rs`、`src/theme.rs`
 
 ## 有什么用
 
 Settings **不是**「系统设置 App」，也**不能写**配置。它是给应用 / 工具箱的**只读外观探针**，类似旧式 XSettings：
 
-- Flatpak / Snap 沙箱里读不到主机 `gsettings` / `kdeglobals`
+- Flatpak / Snap 沙箱里读不到主机桌面设置
 - 通过 portal 问「系统现在偏暗色吗？强调色是什么？」
 - 改主题时后端发 `SettingChanged`，应用可以**热切换**暗/亮，不用重启
 
@@ -46,32 +45,6 @@ Settings **不是**「系统设置 App」，也**不能写**配置。它是给�
   - `text-scaling-factor`（固定 `1.0`）
 - 主题目录变化 → `SettingChanged`（color-scheme / accent-color）
 
-## 和 KDE 的差距
-
-| 项 | Omarchy | KDE |
-|----|---------|-----|
-| 标准外观 | `appearance` 四键都有；contrast / reduced-motion **写死 0** | 有；`reduced-motion` 跟 `kdeglobals` 的 `AnimationDurationFactor==0`；contrast 亦未必完整 |
-| 数据源 | Omarchy `colors.toml` | QPalette / `kdeglobals` / KWin |
-| GNOME 兼容命名空间 | 只暴露 4 个键 | 一般不靠这套；GTK 侧常另有 `xdg-desktop-portal-gtk` 读完整 gsettings |
-| **`org.kde.kdeglobals.*`** | **无** | 几乎整份 kdeglobals（字体、图标主题、widgetStyle、ColorScheme…）给 plasma-integration / Qt |
-| **`org.kde.VirtualKeyboard`** | **无** | 跟 KWin 虚拟键盘状态 |
-| **`org.kde.TabletMode`** | **无** | 跟 KWin 平板模式 |
-| 字体 / 光标大小 | **无**（延后） | 经 kdeglobals（如 `font`）+ 变更信号 |
-| 热更新 | 监视主题文件，发 appearance 信号 | palette / kdeglobals / KWin 属性变更都发 |
-
-### 哪些差距重要
-
-1. **日常跨平台应用（浏览器、Flatpak GTK/Electron）**  
-   只认 `org.freedesktop.appearance`。Omarchy 与 KDE **差距不大**，暗色 + 强调色已经覆盖主路径。
-
-2. **contrast / reduced-motion**  
-   规范有键；Omarchy 恒为「无偏好」。无障碍用户、无障碍动效开关时会不对。KDE 至少接了 reduced-motion。
-
-3. **`org.kde.*` 命名空间**  
-   只对「以为自己在 Plasma 上」的 Qt/KDE 应用有用。Omarchy 上本来就不是 Plasma，**通常不必追平**。
-
-4. **字体 / 光标 / 完整 GNOME interface**  
-   若希望沙箱 GTK 应用字号、光标主题也跟主机一致，需要补；否则应用用自己的默认或 gtk 后端兜底。
 
 ## 延后
 
@@ -80,7 +53,7 @@ Settings **不是**「系统设置 App」，也**不能写**配置。它是给�
 1. 把 `reduced-motion` / `contrast` 接到真实系统开关（若 Omarchy 有对应设置）
 2. 字体名、光标大小（若沙箱 GTK 应用抱怨不一致）
 3. 更完整的 `org.gnome.desktop.interface`（icon-theme 别写死等）
-4. **不计划** 完整 `org.kde.kdeglobals.*` / VirtualKeyboard / TabletMode（除非有具体应用卡住）
+4. **不计划** Plasma 专用 Settings 命名空间（除非有具体应用卡住）
 
 ## 自测
 

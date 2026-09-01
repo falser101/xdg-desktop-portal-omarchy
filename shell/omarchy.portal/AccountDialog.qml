@@ -4,7 +4,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 
-// KDE UserInfoDialog layout: title + privacy subtitle, large centered
+// Account dialog: title + privacy subtitle, large centered
 // avatar, real name, username, Share / Cancel.
 PortalDialog {
   id: root
@@ -17,7 +17,7 @@ PortalDialog {
   title: String(request.title || "Share user info with this application?")
   subtitle: String(request.subtitle || "")
   acceptText: "Share"
-  // KDE uses ~28×30 grid units; keep a tall card for the avatar stack.
+  // Tall card for the avatar stack.
   cardWidth: Style.space(420)
   cardHeight: Style.space(480)
   focus: true

@@ -4,7 +4,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 
-// KDE DynamicLauncherDialog layout: title + subtitle, large centered icon,
+// DynamicLauncher layout: title + subtitle, large centered icon,
 // name (and optional webapp URL). Edit Info toggles name editing.
 PortalDialog {
   id: root

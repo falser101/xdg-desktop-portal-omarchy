@@ -1,7 +1,6 @@
 # Email
 
 状态：**已实现**  
-对照：KDE Email（`KEMailClientLauncherJob`，无对话框）  
 源码：`src/portals/email.rs`
 
 ## 已完成
@@ -14,7 +13,7 @@
 
 ## 说明
 
-- **无 shell 对话框**（与 KDE 一致）：直接拉起默认 `mailto:` 客户端。
+- **无 shell 对话框**：直接拉起默认 `mailto:` 客户端。
 - Frontend `attachment_fds` 由 xdg-desktop-portal 转成 impl 的 `attachments` URI。
 - 附件 / CC 是否生效取决于本机默认邮件客户端（web mailto 往往不支持附件）。
 

@@ -1,13 +1,12 @@
 # DynamicLauncher
 
 状态：**已实现**  
-对照：KDE DynamicLauncherDialog  
 源码：`src/portals/dynamic_launcher.rs`  
 UI：`shell/omarchy.portal/DynamicLauncherDialog.qml`
 
 ## 已完成
 
-- `PrepareInstall`：KDE 风格对话框（大图标、名称、可选 Webapp URL）
+- `PrepareInstall`：对话框（大图标、名称、可选 Webapp URL）
 - 返回 `name` + 原样回传 `icon`（token 由前端生成；缺 `icon` 前端会把成功改成 response=2）
 - `Edit Info…`：可改名称（`editable_name`，默认 true）
 - `RequestInstallToken`：只允许软件中心类 app id（GNOME Software / Discover / AppCenter）
@@ -29,7 +28,7 @@ python3 scripts/portal-call.py dynamic-launcher --install --timeout 60000
 python3 scripts/portal-call.py dynamic-launcher-uninstall
 
 # 白名单免确认（无对话框）
-python3 scripts/portal-call.py dynamic-launcher-token --app-id org.kde.discover          # response 0
+python3 scripts/portal-call.py dynamic-launcher-token --app-id org.freedesktop.portal.test  # see allowlist
 python3 scripts/portal-call.py dynamic-launcher-token --app-id org.omarchy.portal.test    # response 2
 ```
 
@@ -37,4 +36,4 @@ python3 scripts/portal-call.py dynamic-launcher-token --app-id org.omarchy.porta
 
 ## 延后
 
-- Edit 时更换图标（KDE `IconDialog`；portal 默认 `editable_icon=false`）
+- Edit 时更换图标（portal 默认 `editable_icon=false`）

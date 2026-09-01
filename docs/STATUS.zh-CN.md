@@ -10,7 +10,7 @@
 
 对应源文件：`data/omarchy-portals.conf`。
 
-每个接口的**已完成 / 延后 / 对照 KDE**细节单独记在 [`docs/portals/`](portals/) 下，改某一 portal 时只改对应文件。
+每个接口的**已完成 / 延后**细节单独记在 [`docs/portals/`](portals/) 下，改某一 portal 时只改对应文件。
 
 ## 架构
 
@@ -33,14 +33,14 @@
     → gtk（兜底）
 ```
 
-## 对照表
+## 接口表
 
 | 接口 | 状态 | 文档 |
 |------|------|------|
 | FileChooser | 已实现 | [portals/FileChooser.md](portals/FileChooser.md) |
 | Settings | 已实现 | [portals/Settings.md](portals/Settings.md) |
 | AppChooser | 已实现（含设为默认 → mimeapps） | [portals/AppChooser.md](portals/AppChooser.md) |
-| Account | 已实现（对齐 KDE UserInfoDialog） | [portals/Account.md](portals/Account.md) |
+| Account | 已实现 | [portals/Account.md](portals/Account.md) |
 | Access | 已实现（choices / icon） | [portals/Access.md](portals/Access.md) |
 | Notification | 已实现（薄桥 → FDO；含 action / 图标 / 常驻） | [portals/Notification.md](portals/Notification.md) |
 | Inhibit | 已实现 | [portals/Inhibit.md](portals/Inhibit.md) |
@@ -65,7 +65,7 @@ Location、Camera、Trash、NetworkMonitor 等前端有、常见桌面很少自�
 
 多数对话框共用：
 
-- **`parent_window` + `modal`**：KDE 会附着调用方窗口；Omarchy 当前独立 `FloatingWindow`。
+- **`parent_window` + `modal`**：当前独立 `FloatingWindow`，未附着调用方窗口。
 
 FileChooser 专属延后见 [portals/FileChooser.md](portals/FileChooser.md)（沙箱路径还原、KIO、列表语义等）。
 

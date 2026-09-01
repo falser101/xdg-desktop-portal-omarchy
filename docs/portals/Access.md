@@ -1,7 +1,6 @@
 # Access
 
-状态：**已实现**（含 QML choices / icon，对齐 KDE 主路径）  
-对照：`xdg-desktop-portal-kde` → `access.cpp` / `AccessDialog.qml`  
+状态：**已实现**（含 QML choices / icon）  
 源码：`src/portals/access.rs`、`shell/omarchy.portal/AccessDialog.qml`、`src/ui/confirm.rs`（egui 后备）
 
 ## 有什么用
@@ -17,15 +16,6 @@
 - **`icon`**：读 options，默认 `dialog-question`；解析失败回退问号图标
 - egui 后备：checkbox + ComboBox
 
-## 和 KDE 仍差的
-
-| 项 | Omarchy | KDE |
-|----|---------|-----|
-| choices / icon / 按钮文案 | 有 | 有 |
-| `parent_window` + `modal` | 仍丢掉 | 有 |
-| UI 框架 | Omarchy 卡片 | Kirigami FormLayout |
-
-`parent_window` 与其它对话框共用，后面一起做。
 
 ## 怎么测试
 

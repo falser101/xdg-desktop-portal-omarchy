@@ -27,10 +27,6 @@ Omarchy **真正的通知服务**在 shell：
 
 日常本机脚本 **不经过**本接口。
 
-## 关于 KDE
-
-KDE 已从 `xdg-desktop-portal-kde` **删除** Notification，改由 plasmashell 直接实现。  
-Omarchy 仍用「portal 守护进程薄桥 + shell FDO」，不必做成第二套通知 UI。
 
 ## 已完成
 

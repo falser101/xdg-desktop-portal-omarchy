@@ -1,6 +1,6 @@
 //! Resolve document-portal sandbox paths (`/run/user/UID/doc/…`) to host paths.
 //!
-//! Mirrors KDE `kioUrlFromSandboxPath` without KIOFuse: Documents
+//! Restore sandbox Documents paths without FUSE: Documents
 //! `GetMountPoint` + `Info` only.
 
 use std::path::{Component, Path, PathBuf};

@@ -1,7 +1,6 @@
 # Usb
 
 状态：**未实现**  
-对照：KDE UsbDialog
 
 ## 延后
 

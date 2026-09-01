@@ -25,7 +25,7 @@ this backend.
 | FileChooser | done | [FileChooser](docs/portals/FileChooser.md) |
 | Settings | done | [Settings](docs/portals/Settings.md) |
 | AppChooser | done | [AppChooser](docs/portals/AppChooser.md) |
-| Account | done (KDE UserInfoDialog) | [Account](docs/portals/Account.md) |
+| Account | done | [Account](docs/portals/Account.md) |
 | Access | done | [Access](docs/portals/Access.md) |
 | Notification | done (FDO bridge; actions / icon / persistent) | [Notification](docs/portals/Notification.md) |
 | Inhibit | done | [Inhibit](docs/portals/Inhibit.md) |
@@ -53,7 +53,7 @@ Capture stays on Hyprland; UI is `scripts/omarchy-share-picker` →
   Responsive columns (~≥260px per tile, 1–6). Same card chrome for displays and windows.
 - **Thumbnails:** displays via `grim -o`; windows via `omarchy-portal-capture` (`hyprland_toplevel_export_v1`)
 - **Selection:** first item selected by default; ↑↓←→ move; Enter / **Share** confirm; click select, double-click confirm
-- **Footer (KDE-aligned):** left — *Allow the application to do this without asking next time*; right — Cancel / Share
+- **Footer:** left — *Allow the application to do this without asking next time*; right — Cancel / Share
 - **Scrollbar:** right-edge gutter (does not overlay previews); mouse wheel works
 
 Details: [docs/portals/ScreenCast.en.md](docs/portals/ScreenCast.en.md).

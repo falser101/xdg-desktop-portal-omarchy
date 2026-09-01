@@ -140,52 +140,6 @@ capture_share_picker() {
   wait "$pid" 2>/dev/null || true
 }
 
-capture_stock_share_picker() {
-  local dest=$ASSETS/stock-hyprland-preview-share-picker.png
-  local full=$ASSETS/stock-hyprland-preview-share-picker-fullscreen.png
-  if ! command -v hyprland-preview-share-picker >/dev/null; then
-    echo "SKIP stock share picker (not installed)" | tee -a "$LOG"
-    return 0
-  fi
-  echo "==> stock hyprland-preview-share-picker" | tee -a "$LOG"
-  dismiss_portal
-  local list
-  list=$(xdph_window_list)
-  XDPH_WINDOW_SHARING_LIST="$list" hyprland-preview-share-picker --allow-token >>"$LOG" 2>&1 &
-  local pid=$!
-  local geom=""
-  for _ in $(seq 1 80); do
-    # Stock picker is a layer-shell surface, not a normal client.
-    geom=$(hyprctl layers | python3 -c '
-import re, sys
-text = sys.stdin.read()
-m = re.search(
-    r"xywh:\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+),[^\n]*namespace:\s*ch\.wysbd\.hyprland-preview-share-picker",
-    text,
-)
-if m:
-    x, y, w, h = map(int, m.groups())
-    print(f"{max(0, x - 8)},{max(0, y - 8)} {w + 16}x{h + 16}")
-' || true)
-    if [[ -n $geom ]]; then
-      break
-    fi
-    sleep 0.1
-  done
-  if [[ -z $geom ]]; then
-    echo "WARN: stock picker layer not found" | tee -a "$LOG"
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    return 0
-  fi
-  sleep 0.8
-  grim -g "$geom" "$dest"
-  grim "$full"
-  echo "SHOT $dest ($geom)" | tee -a "$LOG"
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-}
-
 main() {
   echo "Assets -> $ASSETS" | tee -a "$LOG"
   capture_portal_kind open || true
@@ -194,7 +148,6 @@ main() {
   capture_portal_kind access || true
   capture_portal_kind app-chooser || true
   capture_share_picker || true
-  capture_stock_share_picker || true
 
   echo
   echo "Captured:"

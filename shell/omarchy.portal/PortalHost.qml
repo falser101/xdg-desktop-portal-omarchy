@@ -129,12 +129,12 @@ Item {
       "omarchy-portal-write", replyJson, replyPath, donePath]
   }
 
-  // KDE desktop portals are a normal Qt.Dialog window, not a layer-shell
+  // Portal dialogs are a normal floating window, not a layer-shell
   // overlay. Match that: a centered floating XDG toplevel sized to the card.
   FloatingWindow {
     id: panel
     visible: root.opened
-    // Match KDE window titles where the dialog has a distinct one.
+    // Use a distinct window title when the dialog provides one.
     title: root.kind === "Account" ? "User Information Requested"
          : (root.kind === "Background" ? "Background Activity"
          : (root.kind === "DynamicLauncher" ? "Launcher Requested" : "Omarchy Portal"))
@@ -150,7 +150,7 @@ Item {
 
     onVisibleChanged: {
       if (!visible && root.opened && !root.finishing) {
-        // KDE treats dismissing the Background prompt without a choice as Allow once.
+        // Dismissing the Background prompt without a choice is Allow once.
         if (root.kind === "Background")
           root.finish({ "kind": "Background", "result": 2 })
         else

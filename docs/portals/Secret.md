@@ -1,7 +1,6 @@
 # Secret
 
 状态：**委托** → `gnome-keyring`  
-对照：KDE 侧通常走 KWallet / secrets
 
 ## 已完成
 

@@ -1,7 +1,6 @@
 # Screenshot
 
 状态：**已实现**  
-对照：KDE Screenshot / RegionSelect  
 源码：`src/portals/screenshot.rs`、`shell/omarchy.portal/ScreenshotDialog.qml`
 
 ## 已完成

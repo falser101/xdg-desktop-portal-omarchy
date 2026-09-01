@@ -91,7 +91,7 @@ pub fn run_blocking(req: PickerRequest) -> PickerReply {
             subtitle,
             body,
         } => PickerReply::Background {
-            // Closing the dialog without a choice matches KDE Allow once.
+            // Closing the dialog without a choice is Allow once.
             result: crate::ui::run_background(title, subtitle, body, token).unwrap_or(2),
         },
         PickerRequest::Wallpaper { uri } => PickerReply::Wallpaper {

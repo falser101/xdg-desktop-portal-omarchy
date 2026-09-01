@@ -1,7 +1,6 @@
 # InputCapture
 
 状态：**委托** → `xdg-desktop-portal-hyprland`  
-对照：KDE InputCapture
 
 ## 已完成
 

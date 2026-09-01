@@ -1,7 +1,6 @@
 # Wallpaper
 
 状态：**已实现**  
-对照：KDE WallpaperDialog  
 源码：`src/portals/wallpaper.rs`
 
 ## 已完成

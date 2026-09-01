@@ -23,7 +23,7 @@ Access 等交互对话框由本仓库实现。
 | FileChooser | 已实现 | [FileChooser](docs/portals/FileChooser.md) |
 | Settings | 已实现 | [Settings](docs/portals/Settings.md) |
 | AppChooser | 已实现 | [AppChooser](docs/portals/AppChooser.md) |
-| Account | 已实现（对齐 KDE UserInfoDialog） | [Account](docs/portals/Account.md) |
+| Account | 已实现 | [Account](docs/portals/Account.md) |
 | Access | 已实现 | [Access](docs/portals/Access.md) |
 | Notification | 已实现（FDO 桥；action / 图标 / 常驻） | [Notification](docs/portals/Notification.md) |
 | Inhibit | 已实现 | [Inhibit](docs/portals/Inhibit.md) |
@@ -51,7 +51,7 @@ Access 等交互对话框由本仓库实现。
   按宽度动态列数（约 ≥260px/卡，1–6 列）。显示器与窗口卡片样式一致。
 - **缩略图：** 显示器 `grim -o`；窗口 `omarchy-portal-capture`（`hyprland_toplevel_export_v1`）
 - **选择：** 默认选中第一项；↑↓←→ 移动；Enter / **Share** 确认；单击选中、双击确认
-- **底栏（对齐 KDE）：** 左侧勾选 *Allow the application to do this without asking next time*；右侧 Cancel / Share
+- **底栏：** 左侧勾选 *Allow the application to do this without asking next time*；右侧 Cancel / Share
 - **滚动条：** 右侧独立 gutter（不遮挡预览）；支持滚轮
 
 细节见 [docs/portals/ScreenCast.md](docs/portals/ScreenCast.md)。

@@ -28,9 +28,9 @@ pub struct AccessResult {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AccountRequest {
-    /// KDE mainText: "Share user info with {app}?"
+    /// Main text: "Share user info with {app}?"
     pub title: String,
-    /// KDE subtitle: what will be shared + reason / no-reason note.
+    /// Subtitle: what will be shared + reason / no-reason note.
     pub subtitle: String,
     pub username: String,
     pub real_name: String,

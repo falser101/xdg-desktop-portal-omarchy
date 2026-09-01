@@ -152,7 +152,7 @@ def logical_size(mon):
 
 
 def screen_label(mon, name):
-    """KDE-style display text: manufacturer model (NAME), else NAME."""
+    """Display text: manufacturer model (NAME), else NAME."""
     parts = []
     make = str(mon.get("make") or mon.get("manufacturer") or "").strip()
     model = str(mon.get("model") or "").strip()
@@ -199,7 +199,7 @@ def build_screens(monitors):
 
 
 def build_synthetics():
-    # KDE OutputsModel RegionIncluded — card without preview in Displays section
+    # Region card without preview in the Displays section
     return [
         {
             "name": "Region",
@@ -273,7 +273,7 @@ def build_windows(raw_windows, clients):
 
 
 def client_tasks_for_screens(screens, clients):
-    """KDE TasksModel-on-output: up to 4 window icons per display (+remainder).
+    """Up to 4 window icons per display (+remainder).
 
     Uses hyprctl clients (all mapped windows), not only XDPH shareable list.
     """
