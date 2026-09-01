@@ -190,8 +190,8 @@ def build_screens(monitors):
                 "y": int(mon.get("y") or 0),
                 "width": lw,
                 "height": lh,
+                "resolution": f"{lw}×{lh}",
                 "synthetic": False,
-                "icon": "video-display",
                 "tasks": [],
             }
         )
@@ -352,7 +352,8 @@ windows = build_windows(
 )
 client_list = clients if isinstance(clients, list) else []
 client_tasks_for_screens(screens, client_list)
-# Live previews are ScreencopyView in QML — do not block on grim/PNG here.
+# Previews are Quickshell ScreencopyView in QML (ShellScreen / Toplevel).
+# Do not prefetch PNG here — that blocked xdph / OBS.
 outputs = screens + build_synthetics()
 
 print(

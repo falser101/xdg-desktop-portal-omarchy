@@ -15,36 +15,34 @@ Routing: `omarchy-portals.conf` / `~/.config/hypr/xdph.conf` (`custom_picker_bin
 
 | Area | Content |
 |------|---------|
-| **Top bar** | `Share region` on the left; monitor chips (geometry filter) when multi-monitor; search on the right |
-| **Body** | Displays grid → “Windows” separator → Windows grid (single scroll view) |
-| **Columns** | Responsive to dialog width (~≥260px per tile, 1–6 columns); keyboard grid matches |
-| **Cards** | Displays and Windows share the **same** card chrome and cell width (icon + title header + preview); no double-layer preview background |
+| **Top bar** | **Display / Windows / Region** pages; monitor chips on Windows when multi-monitor; search on the right |
+| **Display** | Whole-screen cards: `Quickshell.screens` as `ScreencopyView` source (same path as window-preview); name + resolution |
+| **Windows** | Window grid (icon + title + toplevel preview) |
+| **Region** | Own page: copy + `Select region` (`omarchy-capture-region`) |
 | **Scrollbar** | Right-edge gutter (does not overlay previews); draggable + mouse wheel |
 | **Footer** | Left: restore checkbox; right: Cancel / Share (same row) |
 
 ### Interaction
 
-- First item selected by default
-- ↑↓←→ move selection across Displays / Windows
-- Enter / **Share** confirm; click to select, double-click to confirm; Esc cancel
+- Display page first; first monitor selected by default
+- ↑↓←→ move selection on the current page; Enter / **Share** confirm; click to select, double-click to confirm; Esc cancel
 - Footer checkbox:  
   **Allow the application to do this without asking next time** (restore token)
-- `Share region`: `omarchy-capture-region smart` (freeze + snap); full-monitor snap → `screen:NAME`; free rect → `region:OUT@x,y,w,h`
+- Region: `omarchy-capture-region smart` (freeze + snap); full-monitor snap → `screen:NAME`; free rect → `region:OUT@x,y,w,h`
 
 ### Thumbnails & data
 
-- Displays: `grim -o`
-- Windows: `omarchy-portal-capture` → `hyprland_toplevel_export_v1` (no bleed across overlapping windows)
+- Displays: Quickshell `ScreencopyView` + `ShellScreen` (`Quickshell.screens`, same path as Omarchy window-preview)
+- Windows: `ScreencopyView` + `Hyprland.toplevels` (`hyprland_toplevel_export_v1`)
 - Filters out the `Omarchy Portal` dialog itself
 - stdout: `[SELECTION]r?/screen:NAME|window:ID|region:OUT@x,y,w,h`
 - Window IDs from `XDPH_WINDOW_SHARING_LIST`; thumbnails use `hyprctl` addresses
 
 ## Previews (open first, paint after)
 
-- Dialog opens immediately; cards use Quickshell `ScreencopyView` (`live` while hovered/selected)
-- Displays → `Quickshell.screens`; windows → `Hyprland.toplevels` by address
-- Live previews use Quickshell `ScreencopyView` (Hyprland compositor capture)
-- No grim / `omarchy-portal-capture` PNG prefetch (that used to hang OBS / block xdph)
+- Dialog opens immediately; cards use Quickshell `ScreencopyView` (still frame + `captureFrame`, same as window-preview)
+- Displays pass `Quickshell.screens` `ShellScreen` objects straight to `captureSource` — no name re-lookup, no PNG prefetch
+- No grim prefetch (that used to hang OBS / block xdph)
 
 ## Deferred
 

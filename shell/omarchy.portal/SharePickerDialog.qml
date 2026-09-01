@@ -7,11 +7,9 @@ import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 
-// Omarchy share-picker layout:
-// header chips + search → Displays grid → "Windows" separator → window cards.
-// Selection: default first item; arrows move; Enter / Share confirms.
-// Previews: Quickshell ScreencopyView (live compositor capture), from the compositor.
-// PipeWireSourceItem — dialog opens immediately; no grim/PNG prefetch.
+// Omarchy share picker. Same capture path as the window-preview plugin:
+// ScreencopyView + ShellScreen (displays) / Toplevel.wayland (windows).
+// Pages: Display | Windows | Region.
 PortalDialog {
   id: root
 
@@ -20,12 +18,14 @@ PortalDialog {
   property string selected: ""
   property var selectedGeometries: []
   property bool allowToken: extra.allowToken === true
+  property string page: "display"
 
   readonly property var allScreens: extra.screens || []
   readonly property var allWindows: extra.windows || []
   readonly property var hyprToplevels: (Hyprland.toplevels && Hyprland.toplevels.values)
     ? Hyprland.toplevels.values
     : []
+  readonly property int shellScreenCount: Quickshell.screens ? Quickshell.screens.length : 0
 
   title: "Screen Sharing Requested"
   subtitle: "Choose a display, window, or region to share"
@@ -43,48 +43,6 @@ PortalDialog {
     for (var i = 0; i < allScreens.length; i++) {
       if (!allScreens[i].synthetic)
         out.push(allScreens[i])
-    }
-    return out
-  }
-
-  readonly property var syntheticScreens: {
-    var out = []
-    for (var i = 0; i < allScreens.length; i++) {
-      if (allScreens[i].synthetic)
-        out.push(allScreens[i])
-    }
-    return out
-  }
-
-  readonly property var filteredScreens: {
-    var items = realScreens
-    var geos = selectedGeometries
-    var q = query.toLowerCase()
-    var out = []
-    for (var i = 0; i < items.length; i++) {
-      var s = items[i]
-      if (geos.length > 0 && !intersectsAny(s, geos))
-        continue
-      if (q.length > 0) {
-        var hay = String(s.label || s.name || "").toLowerCase()
-        if (hay.indexOf(q) === -1)
-          continue
-      }
-      out.push(s)
-    }
-    return out
-  }
-
-  readonly property var filteredSynthetics: {
-    var q = query.toLowerCase()
-    if (!q.length)
-      return syntheticScreens
-    var out = []
-    for (var i = 0; i < syntheticScreens.length; i++) {
-      var s = syntheticScreens[i]
-      var hay = String(s.label || s.name || "").toLowerCase()
-      if (hay.indexOf(q) !== -1)
-        out.push(s)
     }
     return out
   }
@@ -108,21 +66,35 @@ PortalDialog {
     return out
   }
 
-  // Flat list of selectable values in visual order (for ←→ / default).
-  // Region is a footer action, not a grid card.
-  readonly property var selectableValues: {
+  readonly property var filteredScreenValues: {
+    var _n = root.shellScreenCount
+    var screens = Quickshell.screens || []
     var out = []
-    var screens = filteredScreens || []
-    var wins = filteredWindows || []
-    var i
-    for (i = 0; i < screens.length; i++)
-      out.push(String(screens[i].value || ""))
-    for (i = 0; i < wins.length; i++)
-      out.push(String(wins[i].value || ""))
+    for (var i = 0; i < screens.length; i++) {
+      var s = screens[i]
+      if (!root.screenMatches(s))
+        continue
+      var extra = root.extraForScreen(s)
+      out.push(String(extra.value || ("screen:" + (s.name || ""))))
+    }
     return out
   }
 
-  // Responsive columns from available scroller width (min card ~260px).
+  readonly property int filteredScreenCount: (filteredScreenValues || []).length
+
+  readonly property var selectableValues: {
+    if (page === "region")
+      return ["REGION_PICK"]
+    if (page === "windows") {
+      var wins = filteredWindows || []
+      var wout = []
+      for (var i = 0; i < wins.length; i++)
+        wout.push(String(wins[i].value || ""))
+      return wout
+    }
+    return filteredScreenValues || []
+  }
+
   readonly property int minCardWidth: Style.space(260)
   readonly property int gridGap: Style.space(10)
   readonly property int gridColumns: {
@@ -134,12 +106,19 @@ PortalDialog {
       cols = 6
     return cols
   }
-  // Tile size for Displays/Windows (not PortalDialog.cardHeight dialog chrome).
   readonly property int tileCardHeight: gridColumns >= 4 ? Style.space(180) : (gridColumns >= 3 ? Style.space(200) : Style.space(220))
   readonly property real tileCardWidth: {
     var cols = Math.max(1, gridColumns)
     var w = scroller && scroller.width > 0 ? scroller.width : (cardWidth - Style.space(40))
     return Math.max(Style.space(160), (w - gridGap * (cols - 1)) / cols)
+  }
+
+  readonly property real displayTileWidth: {
+    var n = Math.max(1, Math.min(2, filteredScreenCount))
+    var w = scroller && scroller.width > 0 ? scroller.width : (cardWidth - Style.space(40))
+    if (filteredScreenCount <= 1)
+      return Math.min(w, Style.space(680))
+    return (w - gridGap) / n
   }
 
   function chunkValueRows(items, cols) {
@@ -149,20 +128,72 @@ PortalDialog {
     for (var i = 0; i < list.length; i += n) {
       var row = []
       for (var j = 0; j < n && i + j < list.length; j++)
-        row.push(String(list[i + j].value || ""))
+        row.push(String(list[i + j].value || list[i + j] || ""))
       rows.push(row)
     }
     return rows
   }
 
-  // Row-major grid — Displays and Windows share the same chunking.
   readonly property var selectionRows: {
-    var cols = gridColumns
-    return chunkValueRows(filteredScreens || [], cols).concat(chunkValueRows(filteredWindows || [], cols))
+    if (page === "region")
+      return [["REGION_PICK"]]
+    if (page === "windows")
+      return chunkValueRows(filteredWindows || [], gridColumns)
+    return chunkValueRows(filteredScreenValues || [], Math.max(1, Math.min(2, filteredScreenCount)))
   }
 
-  readonly property bool showWindowsSeparator: (filteredScreens || []).length > 0 && (filteredWindows || []).length > 0
   readonly property bool scrollerOverflow: scroller ? (scroller.contentHeight > scroller.height + 1) : false
+
+  function extraForScreen(screen) {
+    var name = screen ? String(screen.name || "") : ""
+    var extras = root.realScreens || []
+    for (var i = 0; i < extras.length; i++) {
+      if (String(extras[i].name || "") === name)
+        return extras[i]
+    }
+    var model = screen ? String(screen.model || "") : ""
+    var w = screen ? Number(screen.width || 0) : 0
+    var h = screen ? Number(screen.height || 0) : 0
+    var dpr = screen && screen.devicePixelRatio ? Number(screen.devicePixelRatio) : 0
+    if (dpr > 1) {
+      w = Math.round(w / dpr)
+      h = Math.round(h / dpr)
+    }
+    return {
+      "name": name,
+      "label": model && model !== name ? (model + " (" + name + ")") : name,
+      "value": "screen:" + name,
+      "width": w,
+      "height": h,
+      "x": screen ? Number(screen.x || 0) : 0,
+      "y": screen ? Number(screen.y || 0) : 0,
+      "tasks": []
+    }
+  }
+
+  function screenMatches(screen) {
+    if (!screen)
+      return false
+    var extra = extraForScreen(screen)
+    var q = query.toLowerCase()
+    if (q.length) {
+      var hay = (String(extra.label || "") + " " + String(extra.name || "") + " " + String(screen.name || "") + " " + String(screen.model || "")).toLowerCase()
+      if (hay.indexOf(q) === -1)
+        return false
+    }
+    var geos = selectedGeometries
+    if (geos.length > 0 && !intersectsAny(extra, geos))
+      return false
+    return true
+  }
+
+  function screenResolution(screen, extra) {
+    var w = Number((extra && extra.width) || (screen && screen.width) || 0)
+    var h = Number((extra && extra.height) || (screen && screen.height) || 0)
+    if (w > 0 && h > 0)
+      return Math.round(w) + " \u00d7 " + Math.round(h)
+    return ""
+  }
 
   function intersectsAny(item, geos) {
     var ax = Number(item.x || 0), ay = Number(item.y || 0)
@@ -215,7 +246,6 @@ PortalDialog {
       return ""
     if (a.indexOf("0x") === 0)
       return a
-    // Decimal from older payloads — prefer BigInt so >2^53 stays exact.
     if (/^\d+$/.test(a)) {
       try {
         return "0x" + BigInt(a).toString(16)
@@ -229,22 +259,9 @@ PortalDialog {
     return a
   }
 
-  function screenForName(name) {
-    var n = String(name || "")
-    if (!n.length)
-      return null
-    var screens = Quickshell.screens || []
-    for (var i = 0; i < screens.length; i++) {
-      if (String(screens[i].name || "") === n)
-        return screens[i]
-    }
-    return null
-  }
-
   function toplevelWaylandForItem(item) {
     if (!item)
       return null
-    // Touch length so bindings refresh when Hyprland IPC updates.
     var tops = root.hyprToplevels
     var _n = tops.length
     var want = normalizeAddr(item.address || item.handle || "")
@@ -257,7 +274,6 @@ PortalDialog {
           return t.wayland || null
       }
     }
-    // Fallback: class + title (XDPH address is often "0" / unmapped).
     var klass = String(item.className || item.class || "")
     var title = String(item.title || "")
     var classHits = []
@@ -292,31 +308,6 @@ PortalDialog {
     return Quickshell.iconPath("application-x-executable", true)
   }
 
-  function field(item, key, fallback) {
-    if (!item)
-      return fallback || ""
-    var value = item[key]
-    if (value === undefined || value === null)
-      return fallback || ""
-    var text = String(value)
-    return text === "undefined" ? (fallback || "") : text
-  }
-
-  function shareHeading(item) {
-    var name = field(item, "name", "") || field(item, "label", "display")
-    return "Share \u201C" + name + "\u201D"
-  }
-
-  function taskOverflowText(item) {
-    if (!item)
-      return ""
-    var count = Number(item["taskCount"] || ((item["tasks"] || []).length) || 0)
-    if (count === 0)
-      return "No windows open"
-    var overflow = Number(item["taskOverflow"] || 0)
-    return overflow > 0 ? ("+" + overflow) : ""
-  }
-
   function isSelected(value) {
     return selected.length > 0 && selected === String(value || "")
   }
@@ -326,16 +317,26 @@ PortalDialog {
     Qt.callLater(ensureSelectedVisible)
   }
 
+  function setPage(id) {
+    var next = String(id || "display")
+    if (page === next) {
+      Qt.callLater(ensureDefaultSelection)
+      return
+    }
+    page = next
+    if (scroller)
+      scroller.contentY = 0
+    Qt.callLater(ensureDefaultSelection)
+  }
+
   function ensureDefaultSelection() {
-    // Guard: during early binding/setup selectableValues can briefly be undefined
-    // and used to abort the whole Share dialog (TypeError on .length).
     var values = selectableValues
     if (!values || values.length === undefined) {
       selected = ""
       return
     }
     if (values.length === 0) {
-      selected = ""
+      selected = page === "region" ? "REGION_PICK" : ""
       return
     }
     for (var i = 0; i < values.length; i++) {
@@ -401,7 +402,6 @@ PortalDialog {
   }
 
   function ensureSelectedVisible() {
-    // Best-effort: keep content moving when selection walks off-screen.
     if (!scrollerOverflow)
       return
     var values = selectableValues
@@ -448,12 +448,12 @@ PortalDialog {
   }
 
   onAccepted: confirmSelection()
-
-  // Defer so derived lists (selectableValues) are fully bound before we touch .length.
   onQueryChanged: Qt.callLater(ensureDefaultSelection)
   onSelectedGeometriesChanged: Qt.callLater(ensureDefaultSelection)
   onAllScreensChanged: Qt.callLater(ensureDefaultSelection)
   onAllWindowsChanged: Qt.callLater(ensureDefaultSelection)
+  onPageChanged: Qt.callLater(ensureDefaultSelection)
+  onShellScreenCountChanged: Qt.callLater(ensureDefaultSelection)
   Component.onCompleted: {
     try { Hyprland.refreshToplevels() } catch (e) {}
     Qt.callLater(ensureDefaultSelection)
@@ -464,7 +464,6 @@ PortalDialog {
       e.accepted = true
       return
     }
-    // Tab still toggles Cancel/Share via PortalDialog.
     if (e.key === Qt.Key_Tab || e.key === Qt.Key_Backtab) {
       if (handleKey(e))
         e.accepted = true
@@ -479,26 +478,30 @@ PortalDialog {
       Layout.fillWidth: true
       spacing: Style.space(8)
 
-      Button {
-        text: "Share region"
-        bordered: true
-        Layout.alignment: Qt.AlignVCenter
-        onClicked: {
-          root.selectValue("REGION_PICK")
-          root.confirmSelection()
+      Repeater {
+        model: [
+          { "id": "display", "label": "Display" },
+          { "id": "windows", "label": "Windows" },
+          { "id": "region", "label": "Region" }
+        ]
+        delegate: Button {
+          required property var modelData
+          text: modelData.label
+          selected: root.page === modelData.id
+          bordered: true
+          Layout.alignment: Qt.AlignVCenter
+          onClicked: root.setPage(modelData.id)
         }
       }
 
       Item {
         Layout.fillWidth: true
-        visible: !chipsFlow.visible
       }
 
       Flow {
-        id: chipsFlow
-        Layout.fillWidth: true
+        Layout.fillWidth: false
         spacing: Style.space(6)
-        visible: root.realScreens.length > 1
+        visible: root.page === "windows" && root.realScreens.length > 1
 
         Repeater {
           model: root.realScreens
@@ -532,21 +535,19 @@ PortalDialog {
 
       TextField {
         id: searchField
+        visible: root.page !== "region"
         Layout.preferredWidth: Style.space(220)
         Layout.alignment: Qt.AlignRight
-        placeholderText: "Search…"
+        placeholderText: root.page === "windows" ? "Search windows…" : "Search displays…"
         text: root.query
         onTextChanged: root.query = text
         Keys.onPressed: function (e) {
-          // Arrows navigate cards even while search is focused.
           if (root.handleNavKey(e))
             e.accepted = true
         }
       }
     }
 
-    // Flickable + edge scrollbar slot (bar is attached for sync, parented to the
-    // right gutter so it never overlays card previews).
     RowLayout {
       Layout.fillWidth: true
       Layout.fillHeight: true
@@ -582,177 +583,214 @@ PortalDialog {
           width: scroller.width
           spacing: Style.space(12)
 
-          GridLayout {
+          // —— Display — ShellScreen capture, same API as window-preview. ——
+          ColumnLayout {
             Layout.fillWidth: true
-            columns: root.gridColumns
-            columnSpacing: root.gridGap
-            rowSpacing: root.gridGap
-            visible: root.filteredScreens.length > 0
+            spacing: Style.space(10)
+            visible: root.page === "display"
 
-            Repeater {
-              model: root.filteredScreens
+            Text {
+              Layout.fillWidth: true
+              text: "Share an entire display"
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+            }
 
-              // Same card chrome / cell size as Windows (no full-row span).
-              BorderSurface {
-                id: displayCard
-                required property var modelData
-                readonly property var item: modelData
-                readonly property bool sel: root.isSelected(item.value)
-                readonly property bool hot: displayHover.hovered || sel
-                readonly property var tasks: (item && item.tasks) ? item.tasks : []
+            Flow {
+              Layout.fillWidth: true
+              spacing: root.gridGap
 
-                Layout.fillWidth: false
-                Layout.preferredWidth: root.tileCardWidth
-                Layout.maximumWidth: root.tileCardWidth
-                Layout.preferredHeight: root.tileCardHeight
-                color: hot ? Color.menu.selectedBackground : Color.popups.background
-                borderSpec: sel || hot
-                  ? Border.surfaceSpec("menu", "selected-border", Color.menu.selectedBorder, Style.normalBorderWidth)
-                  : Border.flat(Util.alpha(Color.popups.text, 0.18), 1)
-                radius: Style.cornerRadius
-                padding: Style.space(10)
-                clip: true
+              Repeater {
+                model: Quickshell.screens
 
-                ColumnLayout {
-                  anchors.fill: parent
-                  anchors.margins: Style.space(8)
-                  spacing: Style.space(8)
+                BorderSurface {
+                  id: displayCard
+                  required property var modelData
+                  required property int index
+                  readonly property var screen: modelData
+                  readonly property var extra: root.extraForScreen(screen)
+                  readonly property string value: String(extra.value || ("screen:" + (screen && screen.name || "")))
+                  readonly property bool matches: root.screenMatches(screen)
+                  readonly property bool sel: root.isSelected(value)
+                  readonly property bool hot: displayHover.hovered || sel
+                  readonly property string resText: root.screenResolution(screen, extra)
+                  readonly property real aspectW: Math.max(1, Number(extra.width || screen.width || 16))
+                  readonly property real aspectH: Math.max(1, Number(extra.height || screen.height || 9))
 
-                  // Header matches window cards: icon + title (+ task icons).
-                  RowLayout {
-                    Layout.fillWidth: true
+                  visible: matches
+                  width: visible ? root.displayTileWidth : 0
+                  height: visible ? (Math.round(root.displayTileWidth * aspectH / aspectW) + Style.space(72)) : 0
+
+                  color: hot ? Color.menu.selectedBackground : Color.popups.background
+                  borderSpec: sel || hot
+                    ? Border.surfaceSpec("menu", "selected-border", Color.menu.selectedBorder, Style.normalBorderWidth)
+                    : Border.flat(Util.alpha(Color.popups.text, 0.18), 1)
+                  radius: Style.cornerRadius
+                  padding: Style.space(10)
+                  clip: true
+
+                  ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Style.space(8)
                     spacing: Style.space(8)
 
-                    Image {
-                      Layout.preferredWidth: Style.space(18)
-                      Layout.preferredHeight: Style.space(18)
-                      source: root.iconSource(displayCard.item.icon || "video-display")
-                      fillMode: Image.PreserveAspectFit
-                      asynchronous: true
+                    RowLayout {
+                      Layout.fillWidth: true
+                      spacing: Style.space(8)
+
+                      Rectangle {
+                        Layout.preferredHeight: Style.space(22)
+                        Layout.preferredWidth: badgeLabel.implicitWidth + Style.space(12)
+                        radius: height / 2
+                        color: Util.alpha(Color.popups.text, 0.12)
+
+                        Text {
+                          id: badgeLabel
+                          anchors.centerIn: parent
+                          text: "Display"
+                          color: displayCard.hot ? Color.menu.selectedText : Color.popups.text
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption || Style.font.body
+                          font.bold: true
+                        }
+                      }
+
+                      Text {
+                        Layout.fillWidth: true
+                        text: String(displayCard.screen && displayCard.screen.name || displayCard.extra.name || "Display")
+                        color: displayCard.hot ? Color.menu.selectedText : Color.popups.text
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                        font.bold: true
+                        elide: Text.ElideRight
+                      }
+
+                      Text {
+                        visible: displayCard.resText.length > 0
+                        text: displayCard.resText
+                        color: Color.muted
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption || Style.font.body
+                      }
+                    }
+
+                    Item {
+                      id: previewHost
+                      Layout.fillWidth: true
+                      Layout.fillHeight: true
+                      clip: true
+
+                      Rectangle {
+                        anchors.fill: parent
+                        color: Util.alpha(Color.popups.text, 0.06)
+                        radius: Style.cornerRadius
+                      }
+
+                      Column {
+                        anchors.centerIn: parent
+                        spacing: Style.space(4)
+                        visible: !displayLive.hasContent
+                        width: parent.width - Style.space(16)
+
+                        Text {
+                          width: parent.width
+                          horizontalAlignment: Text.AlignHCenter
+                          text: "Entire display"
+                          color: Color.popups.text
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.body
+                          font.bold: true
+                        }
+                        Text {
+                          width: parent.width
+                          horizontalAlignment: Text.AlignHCenter
+                          text: displayCard.resText.length ? displayCard.resText : String(displayCard.screen && displayCard.screen.name || "")
+                          color: Color.muted
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption || Style.font.body
+                        }
+                      }
+
+                      ScreencopyView {
+                        id: displayLive
+                        readonly property real srcW: sourceSize.width > 0 ? sourceSize.width : displayCard.aspectW
+                        readonly property real srcH: sourceSize.height > 0 ? sourceSize.height : displayCard.aspectH
+                        readonly property real fit: Math.min(
+                          previewHost.width / Math.max(1, srcW),
+                          previewHost.height / Math.max(1, srcH)
+                        )
+                        width: Math.max(1, srcW * fit)
+                        height: Math.max(1, srcH * fit)
+                        anchors.centerIn: parent
+                        captureSource: displayCard.screen
+                        live: false
+                        paintCursor: false
+                        visible: hasContent
+                        constraintSize: Qt.size(previewHost.width, previewHost.height)
+
+                        function recapture() {
+                          if (!captureSource)
+                            return
+                          captureFrame()
+                        }
+
+                        onCaptureSourceChanged: Qt.callLater(recapture)
+                        onVisibleChanged: if (visible && captureSource && !hasContent) Qt.callLater(recapture)
+                        Component.onCompleted: Qt.callLater(recapture)
+                      }
+
+                      Timer {
+                        interval: 180
+                        repeat: true
+                        running: displayCard.matches && !!displayLive.captureSource && !displayLive.hasContent
+                        onTriggered: displayLive.recapture()
+                      }
                     }
 
                     Text {
                       Layout.fillWidth: true
-                      text: root.field(displayCard.item, "name", "") || root.field(displayCard.item, "label", "Display")
-                      color: displayCard.hot ? Color.menu.selectedText : Color.popups.text
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.body
-                      font.bold: true
-                      elide: Text.ElideRight
-                    }
-
-                    Repeater {
-                      model: displayCard.tasks
-                      delegate: Image {
-                        required property var modelData
-                        width: Style.space(16)
-                        height: Style.space(16)
-                        source: root.iconSource(modelData.icon)
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: true
-                      }
-                    }
-
-                    Text {
-                      visible: root.taskOverflowText(displayCard.item).length > 0
-                      text: root.taskOverflowText(displayCard.item)
+                      text: String(displayCard.extra.label || displayCard.screen.model || "Entire display")
                       color: Color.muted
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption || Style.font.body
+                      elide: Text.ElideRight
                     }
                   }
 
-                  Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    color: Util.alpha(Color.popups.text, 0.06)
-                    radius: Style.cornerRadius
-                    clip: true
-
-                    readonly property var captureSrc: displayCard.item.synthetic
-                      ? null
-                      : root.screenForName(displayCard.item.name)
-
-                    ScreencopyView {
-                      id: displayLive
-                      anchors.fill: parent
-                      anchors.margins: Style.space(4)
-                      captureSource: parent.captureSrc
-                      // Live for selected/hovered; still frame otherwise (cheaper).
-                      live: displayCard.hot || displayCard.sel
-                      paintCursor: false
-                      visible: parent.captureSrc && hasContent
-                      onCaptureSourceChanged: {
-                        if (captureSource && !live)
-                          Qt.callLater(captureFrame)
-                      }
-                      onLiveChanged: {
-                        if (captureSource && !live)
-                          Qt.callLater(captureFrame)
-                      }
-                      Component.onCompleted: {
-                        if (captureSource && !live)
-                          Qt.callLater(captureFrame)
-                      }
-                    }
-
-                    Image {
-                      anchors.centerIn: parent
-                      width: Style.space(40)
-                      height: Style.space(40)
-                      visible: !displayLive.visible
-                      source: root.iconSource(displayCard.item.icon || "video-display")
-                      fillMode: Image.PreserveAspectFit
-                      asynchronous: true
-                    }
+                  HoverHandler {
+                    id: displayHover
+                    cursorShape: Qt.PointingHandCursor
                   }
-                }
-
-                HoverHandler {
-                  id: displayHover
-                  cursorShape: Qt.PointingHandCursor
-                }
-                TapHandler {
-                  onTapped: root.selectValue(String(displayCard.item.value || ""))
-                  onDoubleTapped: {
-                    root.selectValue(String(displayCard.item.value || ""))
-                    root.confirmSelection()
+                  TapHandler {
+                    onTapped: root.selectValue(displayCard.value)
+                    onDoubleTapped: {
+                      root.selectValue(displayCard.value)
+                      root.confirmSelection()
+                    }
                   }
                 }
               }
             }
-          }
 
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: Style.space(10)
-            visible: root.showWindowsSeparator
-
-            Rectangle {
-              Layout.fillWidth: true
-              Layout.preferredHeight: 1
-              color: Util.alpha(Color.popups.text, 0.22)
-            }
             Text {
-              text: "Windows"
-              color: Color.popups.text
+              visible: root.filteredScreenCount === 0
+              Layout.fillWidth: true
+              horizontalAlignment: Text.AlignHCenter
+              text: root.query.length ? "No matching displays" : "No displays found"
+              color: Color.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.body
-              font.bold: true
-            }
-            Rectangle {
-              Layout.fillWidth: true
-              Layout.preferredHeight: 1
-              color: Util.alpha(Color.popups.text, 0.22)
             }
           }
 
+          // —— Windows — toplevel export via Hyprland.toplevels. ——
           GridLayout {
             Layout.fillWidth: true
             columns: root.gridColumns
             columnSpacing: root.gridGap
             rowSpacing: root.gridGap
-            visible: root.filteredWindows.length > 0
+            visible: root.page === "windows" && root.filteredWindows.length > 0
 
             Repeater {
               model: root.filteredWindows
@@ -819,21 +857,18 @@ PortalDialog {
                       anchors.fill: parent
                       anchors.margins: Style.space(4)
                       captureSource: windowCard.captureSrc
-                      // Window toplevel-export is cheap enough to keep live.
                       live: !!windowCard.captureSrc
                       paintCursor: false
                       visible: !!windowCard.captureSrc && hasContent
                     }
 
-                    Image {
+                    Text {
                       anchors.centerIn: parent
-                      width: Style.space(48)
-                      height: Style.space(48)
                       visible: !winLive.visible
-                      source: root.iconSource(windowCard.item.icon || windowCard.item.className)
-                      fillMode: Image.PreserveAspectFit
-                      asynchronous: true
-                      opacity: 0.55
+                      text: String(windowCard.item.className || windowCard.item.title || "Window")
+                      color: Color.muted
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption || Style.font.body
                     }
                   }
                 }
@@ -854,20 +889,108 @@ PortalDialog {
           }
 
           Text {
-            visible: root.filteredScreens.length === 0 && root.filteredWindows.length === 0
+            visible: root.page === "windows" && root.filteredWindows.length === 0
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             text: root.query.length || root.selectedGeometries.length
-              ? "No matching displays or windows"
-              : "No displays or windows found"
+              ? "No matching windows"
+              : "No windows found"
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
+
+          // —— Region ——
+          Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Style.space(280)
+            visible: root.page === "region"
+
+            BorderSurface {
+              id: regionCard
+              anchors.centerIn: parent
+              width: Math.min(parent.width, Style.space(420))
+              height: Style.space(220)
+              readonly property bool sel: root.isSelected("REGION_PICK")
+              readonly property bool hot: regionHover.hovered || sel
+              color: hot ? Color.menu.selectedBackground : Color.popups.background
+              borderSpec: sel || hot
+                ? Border.surfaceSpec("menu", "selected-border", Color.menu.selectedBorder, Style.normalBorderWidth)
+                : Border.flat(Util.alpha(Color.popups.text, 0.18), 1)
+              radius: Style.cornerRadius
+              padding: Style.space(16)
+
+              ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Style.space(12)
+                spacing: Style.space(10)
+
+                Rectangle {
+                  Layout.preferredHeight: Style.space(22)
+                  Layout.preferredWidth: regionBadge.implicitWidth + Style.space(12)
+                  Layout.alignment: Qt.AlignHCenter
+                  radius: height / 2
+                  color: Util.alpha(Color.popups.text, 0.12)
+
+                  Text {
+                    id: regionBadge
+                    anchors.centerIn: parent
+                    text: "Region"
+                    color: regionCard.hot ? Color.menu.selectedText : Color.popups.text
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption || Style.font.body
+                    font.bold: true
+                  }
+                }
+
+                Text {
+                  Layout.fillWidth: true
+                  horizontalAlignment: Text.AlignHCenter
+                  text: "Share a region"
+                  color: regionCard.hot ? Color.menu.selectedText : Color.popups.text
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.title
+                  font.bold: true
+                }
+
+                Text {
+                  Layout.fillWidth: true
+                  Layout.fillHeight: true
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.WordWrap
+                  text: "The screen will freeze so you can drag a rectangle. Snap to a window or the whole display."
+                  color: Color.muted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                }
+
+                Button {
+                  Layout.alignment: Qt.AlignHCenter
+                  text: "Select region"
+                  selected: true
+                  onClicked: {
+                    root.selectValue("REGION_PICK")
+                    root.confirmSelection()
+                  }
+                }
+              }
+
+              HoverHandler {
+                id: regionHover
+                cursorShape: Qt.PointingHandCursor
+              }
+              TapHandler {
+                onTapped: root.selectValue("REGION_PICK")
+                onDoubleTapped: {
+                  root.selectValue("REGION_PICK")
+                  root.confirmSelection()
+                }
+              }
+            }
+          }
         }
       }
 
-      // Far-right gutter — never overlays the card column.
       Item {
         id: scrollBarSlot
         Layout.fillHeight: true
@@ -881,7 +1004,6 @@ PortalDialog {
           orientation: Qt.Vertical
           policy: QQC2.ScrollBar.AlwaysOn
           size: Math.max(0.08, scroller.visibleArea.heightRatio)
-          // Drive from Flickable unless the user is dragging the bar.
           Binding on position {
             when: !scrollBar.pressed
             value: scroller.visibleArea.yPosition
@@ -910,7 +1032,6 @@ PortalDialog {
     }
   }
 
-  // Restore checkbox on the left of Cancel / Share.
   footerLeft: Row {
     spacing: Style.space(8)
 
