@@ -32,9 +32,15 @@ install="${pkgname}.install"
 
 pkgver() {
   cd "${_pkgname}"
-  git describe --long --tags --abbrev=7 2>/dev/null \
-    | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' \
-    || printf "0.1.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  local desc
+  # git describe prints nothing useful without tags; an empty pipe must not
+  # win over the fallback (sed succeeds on empty stdin).
+  desc=$(git describe --long --tags --abbrev=7 2>/dev/null || true)
+  if [[ -n $desc ]]; then
+    printf '%s\n' "${desc#v}" | sed 's/\([^-]*-g\)/r\1/;s/-/./g'
+  else
+    printf '0.1.0.r%s.g%s\n' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
 }
 
 prepare() {
