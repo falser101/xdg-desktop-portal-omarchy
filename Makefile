@@ -2,7 +2,7 @@ PREFIX ?= /usr
 DESTDIR ?=
 CARGO ?= cargo
 
-.PHONY: build release install install-user install-system setup-user clean aur-srcinfo
+.PHONY: build release install install-user uninstall-user install-system setup-user clean aur-srcinfo
 
 build release:
 	$(CARGO) build --release --locked --bins

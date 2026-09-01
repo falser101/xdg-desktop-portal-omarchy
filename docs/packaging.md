@@ -23,8 +23,11 @@ xdg-desktop-portal-omarchy-setup
 ## Build / install from a checkout
 
 ```bash
-# User-local (dev)
+# User-local (dev only — conflicts with a /usr package)
 ./scripts/install-user.sh
+
+# Remove a previous user-local install before switching to system/AUR:
+./scripts/uninstall-user.sh
 
 # System-wide (needs root, or DESTDIR for packaging)
 sudo ./scripts/install-system.sh
