@@ -11,6 +11,8 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 cd "$ROOT"
 cargo build --release
 install -Dm755 "$ROOT/target/release/xdg-desktop-portal-omarchy" "$BIN"
+install -Dm755 "$ROOT/target/release/omarchy-portal-capture" \
+  "$HOME/.local/libexec/omarchy-portal-capture"
 
 install -Dm644 "$ROOT/data/omarchy.portal" \
   "$DATA/xdg-desktop-portal/portals/omarchy.portal"
@@ -101,5 +103,6 @@ systemctl --user restart xdg-desktop-portal.service xdg-desktop-portal-omarchy.s
 omarchy-shell -q shell rescanPlugins || true
 
 echo "Installed $BIN"
+echo "Window capture: $HOME/.local/libexec/omarchy-portal-capture"
 echo "Shell plugin: $PLUGIN_DST"
 echo "Share picker: $HOME/.local/bin/omarchy-share-picker"

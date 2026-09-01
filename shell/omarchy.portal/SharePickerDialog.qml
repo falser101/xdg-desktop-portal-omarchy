@@ -12,7 +12,6 @@ PortalDialog {
   property string query: ""
   property string selected: ""
   property bool allowToken: extra.allowToken === true
-  property int previewRev: 0
 
   readonly property var screens: extra.screens || []
   readonly property var windows: extra.windows || []
@@ -28,7 +27,6 @@ PortalDialog {
   signal picked(string line, bool allowToken)
 
   readonly property var visibleItems: {
-    var _ = previewRev
     if (page === "displays")
       return screens
     var q = query.toLowerCase()
@@ -60,14 +58,16 @@ PortalDialog {
     if (!p.length)
       return ""
     if (p.indexOf("file:") === 0)
-      return p + "?r=" + previewRev
-    return "file://" + p + "?r=" + previewRev
+      return p
+    return "file://" + p
   }
 
   function setPage(next) {
     page = next
     selected = ""
     query = ""
+    if (next === "displays" && screens.length && !selected)
+      selected = String(screens[0].value || "")
   }
 
   Keys.onPressed: function (e) {
@@ -78,19 +78,6 @@ PortalDialog {
   Component.onCompleted: {
     if (!selected && screens.length)
       selected = String(screens[0].value || "")
-  }
-
-  // Refresh Image sources once grim finishes writing files (share-picker
-  // captures in parallel before summon; this covers late writes).
-  Timer {
-    interval: 350
-    running: true
-    repeat: true
-    onTriggered: {
-      root.previewRev += 1
-      if (root.previewRev > 8)
-        running = false
-    }
   }
 
   ColumnLayout {
@@ -173,7 +160,7 @@ PortalDialog {
                 anchors.margins: Style.space(4)
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
-                cache: false
+                cache: true
                 source: root.previewUrl(modelData.preview)
                 sourceSize.width: 480
                 sourceSize.height: 320
@@ -227,23 +214,19 @@ PortalDialog {
       font.pixelSize: Style.font.body
     }
 
-    RowLayout {
+    Button {
       Layout.fillWidth: true
-      spacing: Style.space(8)
+      text: "Select region…"
+      bordered: true
+      onClicked: root.emitSelection("REGION_PICK")
+    }
 
-      Button {
-        text: "Select region…"
-        bordered: true
-        onClicked: root.emitSelection("REGION_PICK")
-      }
-
-      Toggle {
-        Layout.fillWidth: true
-        label: "Allow restore token"
-        description: "Let this app share again without asking next time"
-        checked: root.allowToken
-        onClicked: root.allowToken = !root.allowToken
-      }
+    Toggle {
+      Layout.fillWidth: true
+      label: "Allow restore token"
+      description: "Let this app share again without asking next time"
+      checked: root.allowToken
+      onClicked: root.allowToken = !root.allowToken
     }
   }
 }
