@@ -1,6 +1,7 @@
 mod app_chooser;
 mod confirm;
 mod file_chooser;
+mod fonts;
 mod visuals;
 
 pub use app_chooser::{run_app_chooser, AppChooserRequest};
@@ -43,6 +44,7 @@ pub fn run_native(
         crate::APP_ID,
         options,
         Box::new(|cc| {
+            fonts::install(&cc.egui_ctx);
             visuals::apply(&cc.egui_ctx, &crate::theme::OmarchyTheme::load());
             Ok(Box::new(app))
         }),

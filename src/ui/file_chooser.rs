@@ -430,7 +430,7 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
         ui.label(RichText::new(&app.req.title).size(18.0).strong());
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            if ui.button("↑").clicked() {
+            if ui.button(super::fonts::up_glyph()).clicked() {
                 app.parent();
             }
             let resp = ui.add(
@@ -590,11 +590,8 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
                     let mut activate = false;
                     let mut toggle = false;
                     ui.horizontal(|ui| {
-                        let label = if is_dir {
-                            format!("📁 {name}")
-                        } else {
-                            format!("📄 {name}")
-                        };
+                        let glyph = super::fonts::file_glyph(is_dir, &name);
+                        let label = format!("{glyph}  {name}");
                         let resp = ui.selectable_label(selected, label);
                         if resp.clicked() {
                             toggle = true;

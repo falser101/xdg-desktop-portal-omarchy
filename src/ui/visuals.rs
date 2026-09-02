@@ -42,5 +42,17 @@ pub fn apply(ctx: &egui::Context, theme: &OmarchyTheme) {
     let mut style = (*ctx.style()).clone();
     style.spacing.item_spacing = egui::vec2(8.0, 6.0);
     style.spacing.button_padding = egui::vec2(12.0, 6.0);
+    style.text_styles.insert(
+        egui::TextStyle::Body,
+        egui::FontId::proportional(14.0),
+    );
+    style.text_styles.insert(
+        egui::TextStyle::Button,
+        egui::FontId::proportional(14.0),
+    );
+    style.text_styles.insert(
+        egui::TextStyle::Heading,
+        egui::FontId::proportional(18.0),
+    );
     ctx.set_style(style);
 }
