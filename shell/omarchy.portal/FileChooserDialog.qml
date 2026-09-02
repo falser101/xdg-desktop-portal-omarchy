@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 import Qt.labs.folderlistmodel
 import Quickshell
 import Quickshell.Io
@@ -36,6 +37,11 @@ PortalDialog {
   property string sortKey: "name"
   property bool sortReversed: false
   property bool didPreselectCurrentFile: false
+  property real crumbBarWidth: 0
+  property real crumbWidthBudget: 0
+  property var visibleCrumbItems: []
+  property var ellipsisMenuItems: []
+  readonly property int crumbMaxLabelWidth: Style.space(140)
 
   title: String(request.title || (saveMode ? "Save" : (dirMode ? "Select folder" : "Open")))
   acceptText: String(request.accept_label || (saveMode || saveFilesMode ? "Save" : (dirMode ? "Select" : "Open")))
@@ -132,6 +138,149 @@ PortalDialog {
     }
     return out
   }
+
+  function crumbChromeWidth() {
+    // Button reserves hover/focus borders + horizontal padding; stay conservative
+    // so the fitted model does not overflow the real Row layout.
+    return Style.spacing.controlPaddingX * 2 + Style.space(12)
+  }
+
+  function measureCrumbLabel(label, maxLabelW, bold) {
+    crumbMetrics.font.bold = !!bold
+    crumbMetrics.elide = Text.ElideNone
+    crumbMetrics.text = String(label)
+    var textW = crumbMetrics.width
+    if (maxLabelW > 0 && textW > maxLabelW) {
+      crumbMetrics.elide = Text.ElideMiddle
+      crumbMetrics.elideWidth = maxLabelW
+      return {
+        text: crumbMetrics.elidedText,
+        width: maxLabelW + crumbChromeWidth(),
+        truncated: true,
+        full: String(label)
+      }
+    }
+    return {
+      text: String(label),
+      width: textW + crumbChromeWidth(),
+      truncated: false,
+      full: String(label)
+    }
+  }
+
+  function rebuildVisibleCrumbs() {
+    var all = breadcrumbCrumbs()
+    var gap = Style.spacing.xs
+    var avail = crumbWidthBudget > 0 ? crumbWidthBudget : crumbBarWidth
+    var maxLabelW = crumbMaxLabelWidth
+    var measured = []
+    for (var i = 0; i < all.length; i++) {
+      var selected = i === all.length - 1
+      var m = measureCrumbLabel(all[i].label, maxLabelW, selected)
+      measured.push({
+        kind: "crumb",
+        label: m.text,
+        fullLabel: m.full,
+        path: all[i].path,
+        selected: selected,
+        width: m.width,
+        truncated: m.truncated,
+        sourceIndex: i
+      })
+    }
+    if (measured.length <= 2 || avail <= 0) {
+      visibleCrumbItems = measured
+      return
+    }
+    var total = 0
+    for (var j = 0; j < measured.length; j++)
+      total += measured[j].width + (j > 0 ? gap : 0)
+    if (total <= avail) {
+      visibleCrumbItems = measured
+      return
+    }
+
+    var ellipsisM = measureCrumbLabel("…", 0, false)
+    var ellipsisW = ellipsisM.width
+    var first = measured[0]
+    var last = measured[measured.length - 1]
+    var keepTail = [last]
+    var used = first.width + gap + ellipsisW + gap + last.width
+
+    // If even root + … + current overflows, shrink the current label.
+    if (used > avail) {
+      var over = used - avail
+      var shrinkTo = Math.max(Style.space(48), maxLabelW - over)
+      var lastRaw = all[all.length - 1]
+      var sm = measureCrumbLabel(lastRaw.label, shrinkTo, true)
+      last = {
+        kind: "crumb",
+        label: sm.text,
+        fullLabel: sm.full,
+        path: lastRaw.path,
+        selected: true,
+        width: sm.width,
+        truncated: sm.truncated,
+        sourceIndex: all.length - 1
+      }
+      keepTail = [last]
+      used = first.width + gap + ellipsisW + gap + last.width
+    }
+
+    for (var k = measured.length - 2; k >= 1; k--) {
+      var nextUsed = used + gap + measured[k].width
+      if (nextUsed <= avail) {
+        keepTail.unshift(measured[k])
+        used = nextUsed
+      } else {
+        break
+      }
+    }
+
+    var firstTailIdx = keepTail[0].sourceIndex
+    var hidden = []
+    for (var h = 1; h < firstTailIdx; h++)
+      hidden.push({ label: all[h].label, path: all[h].path })
+
+    if (hidden.length === 0) {
+      visibleCrumbItems = [first].concat(keepTail)
+      return
+    }
+
+    var items = [
+      first,
+      { kind: "ellipsis", label: "…", hidden: hidden, width: ellipsisW }
+    ]
+    for (var t = 0; t < keepTail.length; t++)
+      items.push(keepTail[t])
+    visibleCrumbItems = items
+  }
+
+  function ensureCrumbsFit() {
+    if (!crumbBarWidth || crumbBarWidth <= 0)
+      return
+    var rowW = crumbRow ? crumbRow.implicitWidth : 0
+    if (rowW <= crumbBarWidth + 1)
+      return
+    // Actual buttons were wider than the estimate — tighten budget and refit.
+    var tighter = Math.max(Style.space(120), 2 * crumbBarWidth - rowW - Style.space(8))
+    if (tighter >= crumbWidthBudget && crumbWidthBudget > 0)
+      tighter = Math.max(Style.space(120), crumbWidthBudget - Style.space(24))
+    if (Math.abs(tighter - crumbWidthBudget) < 1)
+      return
+    crumbWidthBudget = tighter
+    rebuildVisibleCrumbs()
+  }
+
+  function openEllipsisMenu(hidden, anchorItem) {
+    ellipsisMenuItems = hidden || []
+    if (!ellipsisMenuItems.length)
+      return
+    ellipsisPopup.anchorItem = anchorItem
+    ellipsisPopup.open()
+  }
+
+  onCrumbsChanged: rebuildVisibleCrumbs()
 
   function syncPathEdits() {
     pathEdit = recentMode ? recentPlace : currentPath
@@ -572,6 +721,13 @@ PortalDialog {
     }
     choiceValues = initial
     tryPreselectCurrentFile()
+    rebuildVisibleCrumbs()
+  }
+
+  TextMetrics {
+    id: crumbMetrics
+    font.family: Style.font.family
+    font.pixelSize: Style.font.body
   }
 
   onPreviewPathChanged: {
@@ -781,33 +937,63 @@ PortalDialog {
               }
             }
           }
-          Flickable {
+          Item {
+            id: crumbBar
             visible: !root.pathEditing
             Layout.fillWidth: true
             Layout.preferredHeight: root.rowHeight
             clip: true
-            contentWidth: crumbRow.implicitWidth
-            contentHeight: height
-            boundsBehavior: Flickable.StopAtBounds
+            function syncWidth() {
+              root.crumbBarWidth = width
+              root.crumbWidthBudget = width
+              root.rebuildVisibleCrumbs()
+              Qt.callLater(root.ensureCrumbsFit)
+            }
+            onWidthChanged: syncWidth()
+            Component.onCompleted: syncWidth()
+
             Row {
               id: crumbRow
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
               height: parent.height
               spacing: Style.spacing.xs
+              onImplicitWidthChanged: Qt.callLater(root.ensureCrumbsFit)
+
               Repeater {
-                model: root.crumbs
-                delegate: Button {
+                model: root.visibleCrumbItems
+                delegate: Item {
+                  id: crumbDelegate
                   required property int index
                   required property var modelData
                   height: crumbRow.height
-                  text: String(modelData.label)
-                  bordered: true
-                  selected: index === root.crumbs.length - 1
-                  onClicked: {
-                    if (index === root.crumbs.length - 1) {
-                      root.pathEditing = true
-                      root.pathEdit = root.recentMode ? root.recentPlace : root.currentPath
-                    } else {
-                      root.goTo(modelData.path)
+                  width: crumbButton.width
+
+                  Button {
+                    id: crumbButton
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: crumbDelegate.height
+                    text: String(modelData.label)
+                    bordered: true
+                    selected: modelData.kind === "crumb" && modelData.selected === true
+                    tooltipText: {
+                      if (modelData.kind === "ellipsis")
+                        return "Ancestor folders"
+                      if (modelData.truncated)
+                        return String(modelData.fullLabel || modelData.label)
+                      return ""
+                    }
+                    onClicked: {
+                      if (modelData.kind === "ellipsis") {
+                        root.openEllipsisMenu(modelData.hidden, crumbButton)
+                        return
+                      }
+                      if (modelData.selected) {
+                        root.pathEditing = true
+                        root.pathEdit = root.recentMode ? root.recentPlace : root.currentPath
+                      } else {
+                        root.goTo(modelData.path)
+                      }
                     }
                   }
                 }
@@ -1333,6 +1519,89 @@ PortalDialog {
       var path = root.overwritePath
       root.overwritePath = ""
       root.emitPicked([path])
+    }
+  }
+
+  QQC2.Popup {
+    id: ellipsisPopup
+    property var anchorItem: null
+    parent: QQC2.Overlay.overlay
+    padding: Style.spacing.hairline
+    focus: true
+    clip: true
+    width: Style.space(220)
+    implicitHeight: Math.min(
+      Math.max(1, root.ellipsisMenuItems.length) * root.rowHeight
+        + Math.max(0, root.ellipsisMenuItems.length - 1) * Style.spacing.labelGap
+        + Style.spacing.xxs,
+      root.rowHeight * 8 + 7 * Style.spacing.labelGap + Style.spacing.xxs)
+
+    background: BorderSurface {
+      color: Color.popups.background
+      borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.popups.border, Color.popups.border, Style.normalBorderWidth)
+      radius: Style.cornerRadius
+    }
+
+    onAboutToShow: {
+      var overlay = QQC2.Overlay.overlay
+      var gap = Style.spacing.xxs
+      var anchor = ellipsisPopup.anchorItem
+      if (!overlay || !anchor) {
+        ellipsisPopup.parent = anchor || root
+        ellipsisPopup.x = 0
+        ellipsisPopup.y = (anchor ? anchor.height : 0) + gap
+        return
+      }
+      var pos = anchor.mapToItem(overlay, 0, 0)
+      ellipsisPopup.x = pos.x
+      ellipsisPopup.y = pos.y + anchor.height + gap
+      var maxY = overlay.height - ellipsisPopup.implicitHeight - gap
+      if (ellipsisPopup.y > maxY)
+        ellipsisPopup.y = Math.max(gap, pos.y - ellipsisPopup.implicitHeight - gap)
+    }
+
+    contentItem: ListView {
+      id: ellipsisList
+      clip: true
+      spacing: Style.spacing.labelGap
+      boundsBehavior: Flickable.StopAtBounds
+      model: root.ellipsisMenuItems
+      implicitHeight: contentHeight
+
+      delegate: Rectangle {
+        required property var modelData
+        required property int index
+        width: ellipsisList.width
+        height: root.rowHeight
+        color: ellipsisHover.hovered
+          ? Style.hoverFillFor(root.contentText, Color.accent)
+          : "transparent"
+        radius: Style.cornerRadius
+
+        Text {
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          anchors.leftMargin: Style.spacing.controlPaddingX
+          anchors.rightMargin: Style.spacing.controlPaddingX
+          text: String(modelData.label)
+          color: root.contentText
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          elide: Text.ElideMiddle
+        }
+
+        HoverHandler { id: ellipsisHover }
+
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: {
+            root.goTo(modelData.path)
+            ellipsisPopup.close()
+          }
+        }
+      }
     }
   }
 
