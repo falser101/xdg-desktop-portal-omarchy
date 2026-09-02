@@ -22,7 +22,7 @@
 | **Wallpaper** | Set desktop background |
 | **Lockdown** | Stub (`disable-location` on) |
 
-ScreenCast / GlobalShortcuts / InputCapture stay on `xdg-desktop-portal-hyprland`. Secret stays on `gnome-keyring`.
+ScreenCast / GlobalShortcuts / InputCapture stay on `xdg-desktop-portal-hyprland`. The share picker is [`omarchy-share-picker`](https://github.com/falser101/omarchy-share-picker). Secret stays on `gnome-keyring`.
 
 ## Install
 

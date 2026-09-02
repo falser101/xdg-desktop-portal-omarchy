@@ -22,7 +22,7 @@ Omarchy（Hyprland）的 [xdg-desktop-portal](https://flatpak.github.io/xdg-desk
 | **Wallpaper** | 设置壁纸 |
 | **Lockdown** | 桩（默认关闭定位） |
 
-ScreenCast / GlobalShortcuts / InputCapture 由 `xdg-desktop-portal-hyprland` 负责。Secret 走 `gnome-keyring`。
+ScreenCast / GlobalShortcuts / InputCapture 由 `xdg-desktop-portal-hyprland` 负责，共享选择器是 [`omarchy-share-picker`](https://github.com/falser101/omarchy-share-picker)。Secret 走 `gnome-keyring`。
 
 ## 安装
 

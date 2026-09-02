@@ -60,7 +60,7 @@ Artifacts: `/tmp/omarchy-portal-test-report.md`, `/tmp/omarchy-portal-test-repor
 | ui.screenshot | Screenshot |
 | ui.dynamic-launcher | DynamicLauncher PrepareInstall |
 | ui.pick-color | PickColor / hyprpicker path |
-| ui.share_picker_bin | hyprland-share-picker present |
+| ui.share_picker_bin | omarchy-share-picker present |
 
 
 ## Response codes

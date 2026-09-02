@@ -345,11 +345,11 @@ def check_env() -> list[CaseResult]:
     # xdph picker
     xdph = Path.home() / ".config/hypr/xdph.conf"
     xdph_text = xdph.read_text() if xdph.exists() else ""
-    picker_ok = xdph.exists()
+    picker_ok = "omarchy-share-picker" in xdph_text
     cases.append(
         CaseResult(
             "env.xdph_picker",
-            "xdph.conf present (Hyprland default picker)",
+            "xdph.conf uses omarchy-share-picker",
             "env",
             "configured",
             "pass" if picker_ok else "warn",
@@ -529,9 +529,9 @@ def main() -> int:
 
     # ScreenCast picker binary smoke (no full OBS flow)
     print("=== screencast picker smoke ===", flush=True)
-    picker = Path("/usr/bin/hyprland-share-picker")
-    local_picker = Path.home() / ".local/bin/hyprland-share-picker"
-    picker_path = picker if picker.exists() else local_picker
+    picker = Path.home() / ".local/bin/omarchy-share-picker"
+    fallback = Path("/usr/bin/omarchy-share-picker")
+    picker_path = picker if picker.exists() else fallback
     if picker_path.exists():
         env = os.environ.copy()
         env["XDPH_WINDOW_SHARING_LIST"] = ""
@@ -541,7 +541,7 @@ def main() -> int:
             results.append(
                 CaseResult(
                     "ui.share_picker_bin",
-                    "hyprland-share-picker executable",
+                    "omarchy-share-picker executable",
                     "interactive",
                     "runs (may exit without XDPH env)",
                     "pass",
@@ -550,11 +550,11 @@ def main() -> int:
             )
         except subprocess.TimeoutExpired:
             run(["wtype", "-k", "Escape"], timeout=5)
-            run(["pkill", "-f", "hyprland-share-picker"], timeout=5)
+            run(["pkill", "-f", "omarchy-share-picker"], timeout=5)
             results.append(
                 CaseResult(
                     "ui.share_picker_bin",
-                    "hyprland-share-picker executable",
+                    "omarchy-share-picker executable",
                     "interactive",
                     "opens UI when invoked",
                     "pass",
@@ -565,11 +565,11 @@ def main() -> int:
         results.append(
             CaseResult(
                 "ui.share_picker_bin",
-                "hyprland-share-picker executable",
+                "omarchy-share-picker executable",
                 "interactive",
                 "binary exists",
                 "fail",
-                "not found in /usr/bin or ~/.local/bin",
+                "not found in ~/.local/bin or /usr/bin",
             )
         )
 

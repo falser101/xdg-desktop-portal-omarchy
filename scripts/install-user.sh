@@ -47,6 +47,7 @@ mkdir -p "$CONFIG/hypr"
 cat >"$XDPH" <<EOF
 screencopy {
     allow_token_by_default = false
+    custom_picker_binary = omarchy-share-picker
 }
 EOF
 

@@ -19,6 +19,7 @@ mkdir -p "$CONFIG/hypr"
 cat >"$CONFIG/hypr/xdph.conf" <<'EOF'
 screencopy {
     allow_token_by_default = false
+    custom_picker_binary = omarchy-share-picker
 }
 EOF
 echo "Wrote $CONFIG/hypr/xdph.conf"
