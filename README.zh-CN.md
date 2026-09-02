@@ -2,119 +2,47 @@
 
 [English](README.md)
 
-Omarchy 的 [xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/) 后端实现。
+Omarchy（Hyprland）的 [xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/) 后端。对话框走 Omarchy Quickshell 插件。
 
-这不是 GTK 主题。它在 `org.freedesktop.impl.portal.desktop.omarchy` 上实现
-`org.freedesktop.impl.portal.*`，供 Firefox、Chromium、Flatpak 以及本机应用调用
-文件选择、外观设置等相关桌面集成能力。
+## 已实现
 
-**采集类 portal**（ScreenCast / GlobalShortcuts / InputCapture）仍走
-`xdg-desktop-portal-hyprland`（PipeWire / Hyprland 协议）。**分享选择器 UI** 由
-Omarchy 提供（`omarchy-share-picker` + Quickshell 插件）。Screenshot、FileChooser、
-Access 等交互对话框由本仓库实现。
+| Portal | 能力 |
+|--------|------|
+| **FileChooser** | Open / Save / SaveFiles — 侧栏、过滤器、可折叠面包屑、搜索、预览、新建文件夹、Documents 路径还原 |
+| **Settings** | 外观 / 强调色（沙箱应用） |
+| **AppChooser** | 打开方式；可选设为默认 |
+| **Account** | 用户名 / 头像 |
+| **Access** | 权限确认（choices、图标） |
+| **Screenshot** | 交互截图 + 取色 |
+| **Background** | 允许 / 仅一次 / 禁止 |
+| **DynamicLauncher** | 安装 / 卸载 Web 应用启动器 |
+| **Notification** | 桥接到 Freedesktop 通知（action、图标、常驻） |
+| **Inhibit** | 抑制空闲 / 休眠 |
+| **Email** | 通过 `mailto:` / 邮件客户端起草（含附件） |
+| **Wallpaper** | 设置壁纸 |
+| **Lockdown** | 桩 |
+| **ScreenCast UI** | 分享选择器 — Display / Windows / Region，直播 `ScreencopyView` 预览 |
 
-**状态总表：** [docs/STATUS.zh-CN.md](docs/STATUS.zh-CN.md)（中文）· [docs/STATUS.md](docs/STATUS.md)（English）  
-**各 portal 笔记：** [docs/portals/](docs/portals/)
+ScreenCast / GlobalShortcuts / InputCapture 的**采集**仍由 `xdg-desktop-portal-hyprland` 负责；Secret 走 `gnome-keyring`。本仓库提供 Omarchy 风格的分享选择器（`omarchy-share-picker`）。
 
-## 接口一览
-
-| 接口 | 状态 | 说明 |
-|------|------|------|
-| FileChooser | 已实现 | [FileChooser](docs/portals/FileChooser.md) |
-| Settings | 已实现 | [Settings](docs/portals/Settings.md) |
-| AppChooser | 已实现 | [AppChooser](docs/portals/AppChooser.md) |
-| Account | 已实现 | [Account](docs/portals/Account.md) |
-| Access | 已实现 | [Access](docs/portals/Access.md) |
-| Notification | 已实现（FDO 桥；action / 图标 / 常驻） | [Notification](docs/portals/Notification.md) |
-| Inhibit | 已实现 | [Inhibit](docs/portals/Inhibit.md) |
-| Email | 已实现 | [Email](docs/portals/Email.md) |
-| Wallpaper | 已实现 | [Wallpaper](docs/portals/Wallpaper.md) |
-| Screenshot | 已实现 | [Screenshot](docs/portals/Screenshot.md) |
-| Background | 已实现（Allow / Allow once / Forbid） | [Background](docs/portals/Background.md) |
-| DynamicLauncher | 已实现 | [DynamicLauncher](docs/portals/DynamicLauncher.md) |
-| Lockdown | 桩 | [Lockdown](docs/portals/Lockdown.md) |
-| ScreenCast | 委托采集 + Omarchy 选择器 | [ScreenCast 中文](docs/portals/ScreenCast.md) · [EN](docs/portals/ScreenCast.en.md) |
-| GlobalShortcuts | 委托 | [GlobalShortcuts](docs/portals/GlobalShortcuts.md) |
-| InputCapture | 委托 | [InputCapture](docs/portals/InputCapture.md) |
-| Secret | 委托 | [Secret](docs/portals/Secret.md) |
-| Print | **未实现** | [Print](docs/portals/Print.md) |
-| RemoteDesktop | **未实现** | [RemoteDesktop](docs/portals/RemoteDesktop.md) |
-| Clipboard / Usb | **未实现** | [Clipboard](docs/portals/Clipboard.md) / [Usb](docs/portals/Usb.md) |
-
-## ScreenCast 分享选择器（Omarchy）
-
-采集仍由 Hyprland 负责；UI 为 `scripts/omarchy-share-picker` →
-`SharePickerDialog.qml`，在 `xdph.conf` 中注册为 `custom_picker_binary`。
-
-- **顶栏：** `Share region` · 多屏 Chip 过滤 · 搜索
-- **内容：** Displays 网格 →「Windows」分隔 → Windows 网格  
-  按宽度动态列数（约 ≥260px/卡，1–6 列）。显示器与窗口卡片样式一致。
-- **缩略图：** 显示器 `grim -o`；窗口 `omarchy-portal-capture`（`hyprland_toplevel_export_v1`）
-- **选择：** 默认选中第一项；↑↓←→ 移动；Enter / **Share** 确认；单击选中、双击确认
-- **底栏：** 左侧勾选 *Allow the application to do this without asking next time*；右侧 Cancel / Share
-- **滚动条：** 右侧独立 gutter（不遮挡预览）；支持滚轮
-
-细节见 [docs/portals/ScreenCast.md](docs/portals/ScreenCast.md)。
-
-## 构建与安装
-
-### 开发（用户目录）
+## 安装
 
 ```bash
-cargo build --release
-./scripts/install-user.sh
-```
-
-写入 `~/.local` / `~/.config`（daemon、截图助手、分享选择器、portal 路由、Quickshell 插件）。
-
-### 系统安装 / 打包
-
-```bash
-sudo ./scripts/install-system.sh
-# 或: make install-system PREFIX=/usr
-
-# 每个用户再跑一次会话配置：
+yay -S xdg-desktop-portal-omarchy-git
 xdg-desktop-portal-omarchy-setup
 ```
 
-系统路径：`/usr/lib/xdg-desktop-portal-omarchy`、`/usr/lib/omarchy-portal-capture`、`/usr/bin/omarchy-share-picker` 等。详见 [docs/packaging.md](docs/packaging.md)。
-
-### AUR（Arch）
-
-仓库内已有 git 包 PKGBUILD：
-
-- [`aur/xdg-desktop-portal-omarchy-git/`](aur/xdg-desktop-portal-omarchy-git/)
+从源码：
 
 ```bash
-yay -S xdg-desktop-portal-omarchy-git   # 发布到 AUR 之后
+./scripts/install-user.sh          # 用户目录（开发）
+# 或
+sudo ./scripts/install-system.sh   # 系统安装
 xdg-desktop-portal-omarchy-setup
 ```
 
-如何把该 PKGBUILD 推上 aur.archlinux.org：见 [docs/packaging.md](docs/packaging.md)。
+打包说明：[docs/packaging.md](docs/packaging.md)。
 
-### 安装后
+## 许可证
 
-```bash
-systemctl --user restart xdg-desktop-portal-omarchy xdg-desktop-portal xdg-desktop-portal-hyprland
-omarchy restart shell
-```
-
-Omarchy 上 `XDG_CURRENT_DESKTOP=Hyprland`，实际生效的是 `hyprland-portals.conf`。
-
-## Demo（不走 D-Bus）
-
-```bash
-cargo run -- --demo file-chooser
-```
-
-## 推荐路由配置
-
-```ini
-[preferred]
-default=omarchy;hyprland;gtk
-org.freedesktop.impl.portal.ScreenCast=hyprland
-org.freedesktop.impl.portal.GlobalShortcuts=hyprland
-org.freedesktop.impl.portal.InputCapture=hyprland
-org.freedesktop.impl.portal.Screenshot=omarchy
-org.freedesktop.impl.portal.Secret=gnome-keyring
-```
+MIT
