@@ -593,11 +593,12 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
                         let glyph = super::fonts::file_glyph(is_dir, &name);
                         let label = format!("{glyph}  {name}");
                         let resp = ui.selectable_label(selected, label);
-                        if resp.clicked() {
-                            toggle = true;
-                        }
+                        // egui reports clicked() on the double-click frame too;
+                        // only treat it as a single click when it is not a double-click.
                         if resp.double_clicked() {
                             activate = true;
+                        } else if resp.clicked() {
+                            toggle = true;
                         }
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.label(format_time(modified));
@@ -617,14 +618,10 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
                             app.try_accept();
                         }
                     } else if toggle {
-                        if is_dir && !app.req.directory && app.req.mode == FileMode::Open && !app.req.multiple {
-                            app.enter(path);
-                        } else {
-                            app.toggle_select(path.clone());
-                            if !is_dir && app.req.mode == FileMode::Save {
-                                if let Some(n) = path.file_name() {
-                                    app.filename = n.to_string_lossy().into_owned();
-                                }
+                        app.toggle_select(path.clone());
+                        if !is_dir && app.req.mode == FileMode::Save {
+                            if let Some(n) = path.file_name() {
+                                app.filename = n.to_string_lossy().into_owned();
                             }
                         }
                     }
