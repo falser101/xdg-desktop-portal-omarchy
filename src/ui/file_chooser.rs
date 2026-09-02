@@ -1,4 +1,6 @@
+use super::icons::IconCache;
 use super::{cancelled, run_native};
+use crate::desktop::file_icon_names;
 use crate::dict::Choice;
 use crate::filters::FileFilter;
 use crate::paths::{home_dir, places, recent_files, unique_path, RECENT_PLACE};
@@ -70,7 +72,15 @@ pub fn run_file_chooser(
     let state = Arc::new(Mutex::new(ChooserApp::new(req, token.clone())));
     let title = state.lock().unwrap().req.title.clone();
     let ui_state = Arc::clone(&state);
-    let _ = run_native(title, [960.0, 640.0], ChooserUi { state: ui_state, token });
+    let _ = run_native(
+        title,
+        [960.0, 640.0],
+        ChooserUi {
+            state: ui_state,
+            token,
+            icons: IconCache::default(),
+        },
+    );
     let app = state.lock().unwrap();
     match app.outcome {
         Outcome::Accept => Some(app.build_result()),
@@ -414,6 +424,7 @@ impl ChooserApp {
 struct ChooserUi {
     state: Arc<Mutex<ChooserApp>>,
     token: CancellationToken,
+    icons: IconCache,
 }
 
 impl eframe::App for ChooserUi {
@@ -434,7 +445,7 @@ impl eframe::App for ChooserUi {
             if app.outcome != Outcome::Pending {
                 close = true;
             } else {
-                draw(ctx, &mut app, &theme);
+                draw(ctx, &mut app, &theme, &mut self.icons);
                 if ctx.input(|i| i.key_pressed(Key::Escape)) && app.overwrite.is_none() && app.new_folder.is_none()
                 {
                     app.outcome = Outcome::Cancel;
@@ -450,13 +461,13 @@ impl eframe::App for ChooserUi {
     }
 }
 
-fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
+fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: &mut IconCache) {
     egui::TopBottomPanel::top("title").show(ctx, |ui| {
         ui.add_space(6.0);
         ui.label(RichText::new(&app.req.title).size(18.0).strong());
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            if ui.button(super::fonts::up_glyph()).clicked() {
+            if icons.button(ui, &["go-up", "go-previous"], "↑") {
                 app.parent();
             }
             let resp = ui.add(
@@ -573,14 +584,20 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
         .show(ctx, |ui| {
             ui.add_space(4.0);
             ui.label(RichText::new("Places").small().color(super::visuals::rgb(theme.muted)));
-            if ui.selectable_label(app.recent_mode, "Recent").clicked() {
-                app.go_recent();
-            }
+            ui.horizontal(|ui| {
+                icons.show_names(ui, &["document-open-recent", "folder-recent"]);
+                if ui.selectable_label(app.recent_mode, "Recent").clicked() {
+                    app.go_recent();
+                }
+            });
             for (label, path) in places() {
                 let selected = !app.recent_mode && app.folder == path;
-                if ui.selectable_label(selected, label).clicked() {
-                    app.go_folder(path);
-                }
+                ui.horizontal(|ui| {
+                    icons.show(ui, &file_icon_names(true, &path));
+                    if ui.selectable_label(selected, &label).clicked() {
+                        app.go_folder(path);
+                    }
+                });
             }
         });
 
@@ -628,8 +645,9 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
                             row_ui.visuals().selection.bg_fill,
                         );
                     }
-                    let glyph = super::fonts::file_glyph(is_dir, &name);
-                    row_ui.label(format!("{glyph}  {name}"));
+                    icons.show(&mut row_ui, &file_icon_names(is_dir, &path));
+                    row_ui.add_space(6.0);
+                    row_ui.label(&name);
                     row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.label(format_time(modified));
                         ui.add_space(24.0);

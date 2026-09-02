@@ -2,6 +2,7 @@ mod app_chooser;
 mod confirm;
 mod file_chooser;
 mod fonts;
+mod icons;
 mod visuals;
 
 pub use app_chooser::{run_app_chooser, AppChooserRequest};
