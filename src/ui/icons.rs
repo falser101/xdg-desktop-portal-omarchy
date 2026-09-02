@@ -29,14 +29,20 @@ impl IconCache {
         }
     }
 
-    fn paint(&mut self, ui: &mut egui::Ui, names: &[String]) {
+    pub fn paint_at(&mut self, ui: &egui::Ui, names: &[String], rect: egui::Rect) {
         if let Some(tex) = self.get(ui.ctx(), names) {
-            ui.add(
-                egui::Image::new((tex.id(), Vec2::splat(ICON_PT))).sense(egui::Sense::hover()),
+            ui.painter().image(
+                tex.id(),
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
             );
-        } else {
-            ui.add_space(ICON_PT);
         }
+    }
+
+    fn paint(&mut self, ui: &mut egui::Ui, names: &[String]) {
+        let (rect, _) = ui.allocate_exact_size(Vec2::splat(ICON_PT), egui::Sense::hover());
+        self.paint_at(ui, names, rect);
     }
 
     fn get(&mut self, ctx: &egui::Context, names: &[String]) -> Option<TextureHandle> {

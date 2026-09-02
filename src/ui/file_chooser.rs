@@ -5,10 +5,10 @@ use crate::dict::Choice;
 use crate::filters::FileFilter;
 use crate::paths::{home_dir, places, recent_files, unique_path, RECENT_PLACE};
 use crate::theme::OmarchyTheme;
-use egui::{Align, Key, Layout, RichText, ScrollArea, Sense};
+use egui::{Align, FontId, Key, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Vec2};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -106,6 +106,8 @@ struct ChooserApp {
     sort_key: SortKey,
     sort_reversed: bool,
     recent_mode: bool,
+    /// Swallow leftover clicks after entering a folder (KDE-style click-to-enter).
+    ignore_list_until: Option<Instant>,
 }
 
 impl ChooserApp {
@@ -146,6 +148,7 @@ impl ChooserApp {
             sort_key: SortKey::Name,
             sort_reversed: false,
             recent_mode: false,
+            ignore_list_until: None,
         };
         app.refresh();
         app
@@ -294,18 +297,22 @@ impl ChooserApp {
         }
     }
 
+    /// KDE FilePicker: click a directory to enter it; click a file to select
+    /// (double-click accepts). After entering, ignore clicks briefly so the
+    /// second half of a double-click cannot hit a file in the new listing.
     fn on_list_click(&mut self, path: PathBuf, is_dir: bool, double: bool) {
+        if is_dir {
+            self.go_folder(path);
+            self.ignore_list_until = Some(Instant::now() + Duration::from_millis(400));
+            return;
+        }
         if double {
-            if is_dir {
-                self.enter(path);
-            } else {
-                self.selected = vec![path];
-                self.try_accept();
-            }
+            self.selected = vec![path];
+            self.try_accept();
             return;
         }
         self.toggle_select(path.clone());
-        if !is_dir && self.req.mode == FileMode::Save {
+        if self.req.mode == FileMode::Save {
             if let Some(n) = path.file_name() {
                 self.filename = n.to_string_lossy().into_owned();
             }
@@ -615,6 +622,9 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
         ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                let blocked = app
+                    .ignore_list_until
+                    .is_some_and(|t| Instant::now() < t);
                 let entries_len = app.entries.len();
                 for i in 0..entries_len {
                     let (name, path, is_dir, size, modified) = {
@@ -622,46 +632,25 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
                         (e.name.clone(), e.path.clone(), e.is_dir, e.size, e.modified)
                     };
                     let selected = app.selected.contains(&path);
-                    let row_h = ui.spacing().interact_size.y.max(22.0);
-                    let id = ui.id().with(("file-row", path.as_os_str()));
-                    let (row_rect, _) = ui.allocate_exact_size(
-                        egui::vec2(ui.available_width(), row_h),
-                        Sense::hover(),
+                    let row_resp = list_row(
+                        ui,
+                        icons,
+                        &name,
+                        &path,
+                        is_dir,
+                        size,
+                        modified,
+                        selected,
                     );
-                    let mut row_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(row_rect)
-                            .layout(Layout::left_to_right(Align::Center))
-                            .sense(Sense::hover()),
-                    );
-                    if selected {
-                        row_ui.painter().rect_filled(
-                            row_rect,
-                            4.0,
-                            row_ui.visuals().selection.bg_fill,
-                        );
+                    if blocked {
+                        continue;
                     }
-                    icons.show(&mut row_ui, &file_icon_names(is_dir, &path));
-                    row_ui.add_space(6.0);
-                    row_ui.label(&name);
-                    row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(format_time(modified));
-                        ui.add_space(24.0);
-                        ui.label(if is_dir {
-                            String::new()
-                        } else {
-                            format_size(size)
-                        });
-                    });
-                    // Interact on top of icon/name widgets so the whole row
-                    // receives click + double-click (egui child labels steal
-                    // the allocate_exact_size Sense::click otherwise).
-                    let row_resp = ui.interact(row_rect, id, Sense::click());
-                    if row_resp.hovered() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                    }
-                    if row_resp.double_clicked() {
+                    if is_dir && row_resp.clicked() {
+                        app.on_list_click(path, true, false);
+                        break;
+                    } else if row_resp.double_clicked() {
                         app.on_list_click(path, is_dir, true);
+                        break;
                     } else if row_resp.clicked() {
                         app.on_list_click(path, is_dir, false);
                     }
@@ -729,6 +718,67 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
     }
 
     let _ = Sense::click();
+}
+
+/// Paint a file row with no child widgets so the row Sense::click is not stolen.
+fn list_row(
+    ui: &mut egui::Ui,
+    icons: &mut IconCache,
+    name: &str,
+    path: &Path,
+    is_dir: bool,
+    size: u64,
+    modified: Option<std::time::SystemTime>,
+    selected: bool,
+) -> egui::Response {
+    let row_h = ui.spacing().interact_size.y.max(24.0);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), row_h), Sense::click());
+    let vis = ui.visuals();
+    if selected {
+        ui.painter()
+            .rect_filled(rect, 4.0, vis.selection.bg_fill);
+    } else if resp.hovered() {
+        ui.painter()
+            .rect_filled(rect, 4.0, vis.widgets.hovered.bg_fill);
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+
+    let icon_sz = 16.0;
+    let pad = 8.0;
+    let icon_rect = Rect::from_min_size(
+        Pos2::new(rect.left() + pad, rect.center().y - icon_sz * 0.5),
+        Vec2::splat(icon_sz),
+    );
+    icons.paint_at(ui, &file_icon_names(is_dir, path), icon_rect);
+
+    let font = FontId::proportional(14.0);
+    let fg = vis.text_color();
+    let muted = vis.weak_text_color();
+    let date = format_time(modified);
+    let date_galley = ui.fonts(|f| f.layout_no_wrap(date, font.clone(), muted));
+    let date_x = rect.right() - pad - date_galley.size().x;
+    let date_y = rect.center().y - date_galley.size().y * 0.5;
+    ui.painter()
+        .galley(Pos2::new(date_x, date_y), date_galley, muted);
+
+    let size_txt = if is_dir {
+        String::new()
+    } else {
+        format_size(size)
+    };
+    let size_galley = ui.fonts(|f| f.layout_no_wrap(size_txt, font.clone(), muted));
+    let size_x = date_x - 24.0 - size_galley.size().x;
+    let size_y = rect.center().y - size_galley.size().y * 0.5;
+    ui.painter()
+        .galley(Pos2::new(size_x, size_y), size_galley, muted);
+
+    let name_x = icon_rect.right() + 8.0;
+    let name_w = (size_x - 12.0 - name_x).max(0.0);
+    let name_galley = ui.fonts(|f| f.layout(name.to_owned(), font, fg, name_w));
+    let name_y = rect.center().y - name_galley.size().y * 0.5;
+    ui.painter()
+        .galley(Pos2::new(name_x, name_y), name_galley, fg);
+    resp
 }
 
 fn sort_heading(label: &str, active: bool, reversed: bool) -> String {
