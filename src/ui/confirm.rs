@@ -81,7 +81,7 @@ pub fn run_confirm(title: String, subtitle: String, accept: String, token: Cance
     )
 }
 
-/// Background portal: 0 Forbid, 1 Allow, 2 Allow once. `None` if cancelled hard.
+/// Background portal: 0 Forbid, 1 Allow, 2 Allow once. Escape / close → 0.
 pub fn run_background(
     title: String,
     subtitle: String,
@@ -426,7 +426,7 @@ impl eframe::App for PromptUi {
                 });
                 if matches!(app.kind, PromptKind::Background { .. }) {
                     if escape {
-                        app.background_result = Some(2);
+                        app.background_result = Some(0);
                     } else if enter {
                         app.background_result = Some(1);
                     }

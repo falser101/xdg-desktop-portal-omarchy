@@ -21,9 +21,6 @@ makedepends=(
   'pkgconf'
   'wayland'
 )
-optdepends=(
-  'omarchy: Omarchy shell UI for portal dialogs (recommended)'
-)
 provides=('xdg-desktop-portal-omarchy' 'xdg-desktop-portal-impl')
 conflicts=('xdg-desktop-portal-omarchy')
 source=("git+${url}.git")

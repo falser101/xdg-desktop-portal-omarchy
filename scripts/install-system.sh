@@ -33,10 +33,6 @@ fi
 
 install -Dm755 "$ROOT/target/release/xdg-desktop-portal-omarchy" \
   "${DESTDIR}${LIBDIR}/xdg-desktop-portal-omarchy"
-install -Dm755 "$ROOT/target/release/omarchy-portal-capture" \
-  "${DESTDIR}${LIBDIR}/omarchy-portal-capture"
-install -Dm755 "$ROOT/scripts/omarchy-share-picker" \
-  "${DESTDIR}${BINDIR}/omarchy-share-picker"
 install -Dm755 "$ROOT/scripts/setup-user.sh" \
   "${DESTDIR}${BINDIR}/xdg-desktop-portal-omarchy-setup"
 
@@ -70,10 +66,6 @@ Name=org.freedesktop.impl.portal.desktop.omarchy
 Exec=${LIBDIR}/xdg-desktop-portal-omarchy
 SystemdService=xdg-desktop-portal-omarchy.service
 EOF
-
-install -d "${DESTDIR}${DATADIR}/xdg-desktop-portal-omarchy"
-cp -a "$ROOT/shell/omarchy.portal" \
-  "${DESTDIR}${DATADIR}/xdg-desktop-portal-omarchy/"
 
 install -Dm644 "$ROOT/LICENSE" \
   "${DESTDIR}${DATADIR}/licenses/xdg-desktop-portal-omarchy/LICENSE"

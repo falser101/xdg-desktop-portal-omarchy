@@ -106,11 +106,10 @@ impl Background {
                 Some(PickerReply::Confirm { accepted: false }) => FORBID,
                 Some(PickerReply::Access(r)) if r.granted => ALLOW,
                 Some(PickerReply::Access(_)) => FORBID,
-                // Close without choosing → Allow once.
-                Some(PickerReply::Cancel) | None => ALLOW_ONCE,
+                Some(PickerReply::Cancel) | None => FORBID,
                 other => {
-                    tracing::warn!(?other, "Background: unexpected picker reply; Allow once");
-                    ALLOW_ONCE
+                    tracing::warn!(?other, "Background: unexpected picker reply; Forbid");
+                    FORBID
                 }
             };
             if !app_id_owned.is_empty() {

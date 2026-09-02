@@ -1,4 +1,5 @@
 /target
+scripts/__pycache__/
 aur/*/pkg/
 aur/*/src/
 aur/*/xdg-desktop-portal-omarchy/

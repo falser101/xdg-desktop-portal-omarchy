@@ -61,7 +61,6 @@ pub enum PickerReply {
     /// 0 Forbid, 1 Allow, 2 Allow once
     Background { result: u32 },
     Wallpaper { granted: bool },
-    Share { selection: String },
     Confirm { accepted: bool },
     DynamicLauncher {
         accepted: bool,
@@ -91,8 +90,7 @@ pub fn run_blocking(req: PickerRequest) -> PickerReply {
             subtitle,
             body,
         } => PickerReply::Background {
-            // Closing the dialog without a choice is Allow once.
-            result: crate::ui::run_background(title, subtitle, body, token).unwrap_or(2),
+            result: crate::ui::run_background(title, subtitle, body, token).unwrap_or(0),
         },
         PickerRequest::Wallpaper { uri } => PickerReply::Wallpaper {
             granted: crate::ui::run_wallpaper_confirm(uri, token),
@@ -143,159 +141,7 @@ pub fn child_main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run_via_shell(req: PickerRequest, token: CancellationToken) -> Option<PickerReply> {
-    let tmp = std::env::temp_dir().join(format!(
-        "omarchy-portal-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .ok()?
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&tmp).ok()?;
-    let reply_file = tmp.join("reply.json");
-    let done_file = tmp.join("done");
-
-    let mut extra = serde_json::Map::new();
-    match &req {
-        PickerRequest::AppChooser(r) => {
-            let apps: Vec<serde_json::Value> = crate::desktop::load_apps(&r.choices)
-                .into_iter()
-                .map(|a| {
-                    serde_json::json!({
-                        "id": crate::desktop::portal_app_id(&a.id),
-                        "name": a.name,
-                        "icon": a.icon,
-                    })
-                })
-                .collect();
-            extra.insert("apps".into(), serde_json::Value::Array(apps));
-        }
-        PickerRequest::Account(r) => {
-            extra.insert("user".into(), r.username.clone().into());
-            extra.insert("realName".into(), r.real_name.clone().into());
-            if let Some(img) = r.image.as_ref() {
-                extra.insert("image".into(), img.clone().into());
-            }
-        }
-        PickerRequest::Wallpaper { uri } => {
-            extra.insert("uri".into(), uri.clone().into());
-        }
-        PickerRequest::FileChooser(r) => {
-            let mut places = vec![serde_json::json!({
-                "label": "Recent",
-                "path": crate::paths::RECENT_PLACE,
-            })];
-            places.extend(crate::paths::places().into_iter().map(|(label, path)| {
-                serde_json::json!({
-                    "label": label,
-                    "path": path.to_string_lossy(),
-                })
-            }));
-            extra.insert("places".into(), serde_json::Value::Array(places));
-            let recent: Vec<serde_json::Value> = crate::paths::recent_files(24)
-                .into_iter()
-                .map(|f| {
-                    serde_json::json!({
-                        "label": f.label,
-                        "path": f.path.to_string_lossy(),
-                        "isDir": f.is_dir,
-                        "size": f.size,
-                        "modified": f.modified,
-                    })
-                })
-                .collect();
-            extra.insert("recent".into(), serde_json::Value::Array(recent));
-            let filters: Vec<serde_json::Value> = r
-                .filters
-                .iter()
-                .map(|f| {
-                    serde_json::json!({
-                        "label": f.label,
-                        "globs": f.globs(),
-                        "portal": serde_json::to_value(f.to_portal()).unwrap_or(serde_json::Value::Null),
-                    })
-                })
-                .collect();
-            extra.insert("filters".into(), serde_json::Value::Array(filters));
-            extra.insert(
-                "filterIndex".into(),
-                serde_json::json!(r.current_filter.unwrap_or(0)),
-            );
-        }
-        _ => {}
-    }
-
-    let kind = match &req {
-        PickerRequest::FileChooser(_) => "FileChooser",
-        PickerRequest::AppChooser(_) => "AppChooser",
-        PickerRequest::Access(_) => "Access",
-        PickerRequest::Account(_) => "Account",
-        PickerRequest::Background { .. } => "Background",
-        PickerRequest::Wallpaper { .. } => "Wallpaper",
-        PickerRequest::Confirm { .. } => "Confirm",
-        PickerRequest::DynamicLauncher { .. } => "DynamicLauncher",
-        PickerRequest::Screenshot => "Screenshot",
-    };
-
-    let payload = serde_json::json!({
-        "kind": kind,
-        "request": req,
-        "extra": extra,
-        "replyFile": reply_file.to_string_lossy(),
-        "doneFile": done_file.to_string_lossy(),
-    });
-
-    let output = tokio::process::Command::new("omarchy-shell")
-        .args(["shell", "summon", "omarchy-portal", &payload.to_string()])
-        .output()
-        .await
-        .ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if !output.status.success() || stdout.contains("unknown") {
-        tracing::warn!(
-            "omarchy-shell summon omarchy-portal failed: status={:?} stdout={stdout}",
-            output.status.code()
-        );
-        return None;
-    }
-
-    loop {
-        tokio::select! {
-            _ = token.cancelled() => {
-                let _ = tokio::process::Command::new("omarchy-shell")
-                    .args(["-q", "shell", "hide", "omarchy-portal"])
-                    .status()
-                    .await;
-                let _ = std::fs::remove_dir_all(&tmp);
-                return None;
-            }
-            _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {
-                if done_file.exists() {
-                    let bytes = std::fs::read(&reply_file).ok()?;
-                    let _ = std::fs::remove_dir_all(&tmp);
-                    match serde_json::from_slice::<PickerReply>(&bytes) {
-                        Ok(reply) => return Some(reply),
-                        Err(err) => {
-                            tracing::warn!(
-                                error = %err,
-                                raw = %String::from_utf8_lossy(&bytes),
-                                "portal shell reply deserialize failed"
-                            );
-                            return None;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 pub async fn run(req: PickerRequest, token: CancellationToken) -> Option<PickerReply> {
-    if let Some(reply) = run_via_shell(req.clone(), token.clone()).await {
-        return Some(reply);
-    }
-    tracing::warn!("shell portal dialog unavailable, falling back to embedded picker");
     let exe = std::env::current_exe().ok()?;
     let payload = serde_json::to_vec(&req).ok()?;
     let mut child = tokio::process::Command::new(exe)

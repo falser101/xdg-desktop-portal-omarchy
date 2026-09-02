@@ -2,28 +2,27 @@
 
 [中文](README.zh-CN.md)
 
-[xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/) backend for Omarchy (Hyprland). Dialogs use the Omarchy Quickshell plugin.
+[xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/) backend for Omarchy (Hyprland). Dialogs use the built-in egui picker.
 
 ## Implemented
 
 | Portal | What it does |
 |--------|----------------|
-| **FileChooser** | Open / Save / SaveFiles — places, filters, collapsible breadcrumbs, search, preview, new folder, Documents path restore |
-| **Settings** | Appearance / accent color for sandboxed apps |
-| **AppChooser** | Open-with list; optional set-as-default |
-| **Account** | User name / avatar dialog |
-| **Access** | Permission prompt (choices, icon) |
+| **FileChooser** | Open / Save / SaveFiles |
+| **Settings** | Appearance / accent color |
+| **AppChooser** | Open-with; optional set-as-default |
+| **Account** | User name / avatar |
+| **Access** | Permission prompt |
 | **Screenshot** | Interactive capture + pick-color |
-| **Background** | Allow / Allow once / Forbid |
+| **Background** | Allow / Allow once / Deny |
 | **DynamicLauncher** | Install / uninstall web-app launchers |
-| **Notification** | Bridge to Freedesktop notifications (actions, icon, persistent) |
-| **Inhibit** | Session idle / sleep inhibit |
-| **Email** | Compose via `mailto:` / configured client (attachments) |
+| **Notification** | Freedesktop notification bridge |
+| **Inhibit** | Idle / sleep inhibit |
+| **Email** | Compose via `mailto:` (attachments) |
 | **Wallpaper** | Set desktop background |
-| **Lockdown** | Stub |
-| **ScreenCast UI** | Share picker — Display / Windows / Region pages with live `ScreencopyView` previews |
+| **Lockdown** | Stub (`disable-location` on) |
 
-ScreenCast / GlobalShortcuts / InputCapture **capture** stays on `xdg-desktop-portal-hyprland`. Secret stays on `gnome-keyring`. This repo supplies the Omarchy-styled share picker (`omarchy-share-picker`).
+ScreenCast / GlobalShortcuts / InputCapture stay on `xdg-desktop-portal-hyprland`. Secret stays on `gnome-keyring`.
 
 ## Install
 
@@ -32,16 +31,9 @@ yay -S xdg-desktop-portal-omarchy-git
 xdg-desktop-portal-omarchy-setup
 ```
 
-From a checkout:
+From a checkout: `./scripts/install-user.sh` or `sudo ./scripts/install-system.sh` then `xdg-desktop-portal-omarchy-setup`.
 
-```bash
-./scripts/install-user.sh          # user-local (dev)
-# or
-sudo ./scripts/install-system.sh   # system-wide
-xdg-desktop-portal-omarchy-setup
-```
-
-Packaging notes: [docs/packaging.md](docs/packaging.md).
+Packaging: [docs/packaging.md](docs/packaging.md).
 
 ## License
 

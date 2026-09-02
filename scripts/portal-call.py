@@ -423,8 +423,8 @@ def main() -> int:
         return 0 if box["done"] else 2
 
     if args.kind == "background":
-        # Direct impl call (same as before). Expect a 3-button dialog:
-        # Deny=0, Allow=1, Allow once=2 (close without choose → 2).
+        # Direct impl call. 3-button dialog: Deny=0, Allow=1, Allow once=2.
+        # Escape / dismiss → Deny (0).
         proxy = Gio.DBusProxy.new_sync(
             bus,
             Gio.DBusProxyFlags.NONE,
