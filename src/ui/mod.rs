@@ -1,7 +1,9 @@
 mod app_chooser;
+mod chrome;
 mod confirm;
 mod file_chooser;
 mod fonts;
+mod glyphs;
 mod icons;
 mod visuals;
 
@@ -23,11 +25,20 @@ pub fn run_native(
     size: [f32; 2],
     app: impl eframe::App + 'static,
 ) -> Result<(), eframe::Error> {
+    run_native_sized(title, size, [400.0, 260.0], app)
+}
+
+pub fn run_native_sized(
+    title: impl Into<String>,
+    size: [f32; 2],
+    min_size: [f32; 2],
+    app: impl eframe::App + 'static,
+) -> Result<(), eframe::Error> {
     let title = title.into();
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(size)
-            .with_min_inner_size([520.0, 320.0])
+            .with_min_inner_size(min_size)
             .with_title(&title)
             .with_app_id(crate::APP_ID),
         centered: true,

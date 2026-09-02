@@ -1,11 +1,21 @@
+use super::chrome::{
+    self, body_text, caption_text, destructive_button, dim_overlay, hairline, labeled_toggle,
+    primary_button, search_field, secondary_button, section_label, sheet_frame, sidebar_item,
+    title_text, toolbar_glyph_button, trailing_actions, well_edit, BODY_PT, BUTTON_H, CAPTION_PT,
+    ROW_H, ROW_ICON, SIDEBAR_W,
+};
+use super::glyphs::{self, Glyph};
 use super::icons::IconCache;
-use super::{cancelled, run_native};
+use super::{cancelled, run_native_sized};
 use crate::desktop::file_icon_names;
 use crate::dict::Choice;
 use crate::filters::FileFilter;
 use crate::paths::{home_dir, places, recent_files, unique_path, RECENT_PLACE};
 use crate::theme::OmarchyTheme;
-use egui::{Align, FontId, Key, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Vec2};
+use egui::{
+    Align, CornerRadius, FontFamily, FontId, Frame, Key, Layout, Margin, Pos2, Rect, RichText,
+    ScrollArea, Sense, Stroke, Vec2,
+};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -72,13 +82,15 @@ pub fn run_file_chooser(
     let state = Arc::new(Mutex::new(ChooserApp::new(req, token.clone())));
     let title = state.lock().unwrap().req.title.clone();
     let ui_state = Arc::clone(&state);
-    let _ = run_native(
+    let _ = run_native_sized(
         title,
-        [960.0, 640.0],
+        [980.0, 660.0],
+        [560.0, 400.0],
         ChooserUi {
             state: ui_state,
             token,
             icons: IconCache::default(),
+            theme: OmarchyTheme::load(),
         },
     );
     let app = state.lock().unwrap();
@@ -108,6 +120,10 @@ struct ChooserApp {
     recent_mode: bool,
     /// Swallow leftover clicks after entering a folder (KDE-style click-to-enter).
     ignore_list_until: Option<Instant>,
+    editing_path: bool,
+    last_query: String,
+    search_focused: bool,
+    path_focused: bool,
 }
 
 impl ChooserApp {
@@ -149,6 +165,10 @@ impl ChooserApp {
             sort_reversed: false,
             recent_mode: false,
             ignore_list_until: None,
+            editing_path: false,
+            last_query: String::new(),
+            search_focused: false,
+            path_focused: false,
         };
         app.refresh();
         app
@@ -424,6 +444,7 @@ struct ChooserUi {
     state: Arc<Mutex<ChooserApp>>,
     token: CancellationToken,
     icons: IconCache,
+    theme: OmarchyTheme,
 }
 
 impl eframe::App for ChooserUi {
@@ -437,15 +458,17 @@ impl eframe::App for ChooserUi {
         }
         ctx.request_repaint_after(Duration::from_millis(120));
 
-        let theme = OmarchyTheme::load();
         let mut close = false;
         {
             let mut app = self.state.lock().unwrap();
             if app.outcome != Outcome::Pending {
                 close = true;
             } else {
-                draw(ctx, &mut app, &theme, &mut self.icons);
-                if ctx.input(|i| i.key_pressed(Key::Escape)) && app.overwrite.is_none() && app.new_folder.is_none()
+                draw(ctx, &mut app, &self.theme, &mut self.icons);
+                if ctx.input(|i| i.key_pressed(Key::Escape))
+                    && app.overwrite.is_none()
+                    && app.new_folder.is_none()
+                    && !app.editing_path
                 {
                     app.outcome = Outcome::Cancel;
                 }
@@ -461,208 +484,127 @@ impl eframe::App for ChooserUi {
 }
 
 fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: &mut IconCache) {
-    egui::TopBottomPanel::top("title").show(ctx, |ui| {
-        ui.add_space(6.0);
-        ui.label(RichText::new(&app.req.title).size(18.0).strong());
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            if icons.button(ui, &["go-up", "go-previous"], "↑") {
-                app.parent();
-            }
-            let resp = ui.add(
-                egui::TextEdit::singleline(&mut app.path_edit)
-                    .desired_width(ui.available_width() - 220.0),
-            );
-            if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                let raw = app.path_edit.trim();
-                if raw == RECENT_PLACE {
-                    app.go_recent();
-                } else {
-                    let path = PathBuf::from(raw);
-                    if path.is_dir() {
-                        app.go_folder(path);
-                    }
-                }
-            }
-            ui.add(
-                egui::TextEdit::singleline(&mut app.query)
-                    .hint_text("Search")
-                    .desired_width(180.0),
-            );
-            if ui.input(|i| i.key_released(Key::Enter)) && !app.query.is_empty() {
-                app.refresh();
-            }
-        });
-        ui.add_space(4.0);
-    });
+    if app.query != app.last_query {
+        app.last_query = app.query.clone();
+        app.refresh();
+    }
 
-    egui::TopBottomPanel::bottom("actions").show(ctx, |ui| {
-        if let Some(err) = &app.error {
-            ui.colored_label(super::visuals::rgb(theme.red), err);
-        }
-        if !app.req.choices.is_empty() {
-            ui.horizontal_wrapped(|ui| {
-                for (i, choice) in app.req.choices.iter().enumerate() {
-                    if choice.options.is_empty() {
-                        let mut on = app.choice_values[i] == "true";
-                        if ui.checkbox(&mut on, &choice.label).changed() {
-                            app.choice_values[i] = if on { "true" } else { "false" }.into();
-                        }
-                    } else {
-                        ui.label(&choice.label);
-                        egui::ComboBox::from_id_salt(format!("choice-{i}"))
-                            .selected_text(&app.choice_values[i])
-                            .show_ui(ui, |ui| {
-                                for (id, label) in &choice.options {
-                                    ui.selectable_value(&mut app.choice_values[i], id.clone(), label);
-                                }
-                            });
-                    }
-                }
-            });
-        }
-        ui.horizontal(|ui| {
-            if ui.button("Cancel").clicked() {
-                app.outcome = Outcome::Cancel;
-            }
-            if ui.button("New folder").clicked() {
-                app.new_folder = Some(String::new());
-            }
-            let mut hidden = app.show_hidden;
-            if ui.checkbox(&mut hidden, "Hidden").changed() {
-                app.show_hidden = hidden;
-                app.refresh();
-            }
-            if !app.req.filters.is_empty() {
-                let label = app
-                    .filter_index
-                    .and_then(|i| app.req.filters.get(i))
-                    .map(|f| f.label.clone())
-                    .unwrap_or_else(|| "All files".into());
-                let filter_labels: Vec<(usize, String)> = app
-                    .req
-                    .filters
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| (i, f.label.clone()))
-                    .collect();
-                let selected = app.filter_index;
-                let mut chosen = None;
-                egui::ComboBox::from_id_salt("filter")
-                    .selected_text(label)
-                    .show_ui(ui, |ui| {
-                        for (i, name) in &filter_labels {
-                            if ui.selectable_label(selected == Some(*i), name).clicked() {
-                                chosen = Some(*i);
-                            }
-                        }
-                    });
-                if let Some(i) = chosen {
-                    app.filter_index = Some(i);
-                    app.refresh();
-                }
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.button(RichText::new(&app.req.accept_label).strong()).clicked() {
-                    app.try_accept();
-                }
-                if app.req.mode == FileMode::Save || app.req.mode == FileMode::SaveFiles {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut app.filename)
-                            .hint_text("File name")
-                            .desired_width(260.0),
-                    );
-                }
-            });
-        });
-    });
+    let sidebar_fill = ctx.style().visuals.faint_bg_color;
+    let panel_fill = ctx.style().visuals.panel_fill;
 
+    egui::TopBottomPanel::top("title")
+        .frame(
+            Frame::new()
+                .fill(panel_fill)
+                .inner_margin(Margin::symmetric(14, 10)),
+        )
+        .show(ctx, |ui| {
+            ui.add(egui::Label::new(title_text(&app.req.title)).truncate());
+            ui.add_space(10.0);
+            draw_toolbar(ui, app);
+        });
+
+    egui::TopBottomPanel::bottom("actions")
+        .frame(
+            Frame::new()
+                .fill(panel_fill)
+                .inner_margin(Margin::symmetric(14, 10)),
+        )
+        .show(ctx, |ui| {
+            draw_footer(ui, app, theme);
+        });
+
+    let win_w = ctx.screen_rect().width();
+    let side_w = if win_w < 700.0 { 148.0 } else { SIDEBAR_W };
     egui::SidePanel::left("places")
         .resizable(true)
-        .default_width(180.0)
+        .default_width(side_w)
+        .width_range(132.0..=280.0)
+        .frame(
+            Frame::new()
+                .fill(sidebar_fill)
+                .inner_margin(Margin::symmetric(8, 10)),
+        )
         .show(ctx, |ui| {
-            ui.add_space(4.0);
-            ui.label(RichText::new("Places").small().color(super::visuals::rgb(theme.muted)));
-            ui.horizontal(|ui| {
-                icons.show_names(ui, &["document-open-recent", "folder-recent"]);
-                if ui.selectable_label(app.recent_mode, "Recent").clicked() {
-                    app.go_recent();
-                }
-            });
+            section_label(ui, "Favorites");
+            if sidebar_item(ui, Glyph::Recents, "Recents", app.recent_mode).clicked() {
+                app.go_recent();
+            }
+            ui.add_space(6.0);
+            section_label(ui, "Locations");
             for (label, path) in places() {
                 let selected = !app.recent_mode && app.folder == path;
-                ui.horizontal(|ui| {
-                    icons.show(ui, &file_icon_names(true, &path));
-                    if ui.selectable_label(selected, &label).clicked() {
-                        app.go_folder(path);
+                if sidebar_item(ui, glyphs::for_place(&label), &label, selected).clicked() {
+                    app.go_folder(path);
+                }
+            }
+        });
+
+    egui::CentralPanel::default()
+        .frame(Frame::new().fill(panel_fill).inner_margin(Margin::symmetric(8, 6)))
+        .show(ctx, |ui| {
+            draw_column_header(ui, app);
+            ui.add_space(2.0);
+            hairline(ui);
+            ui.add_space(2.0);
+            ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    let blocked = app.ignore_list_until.is_some_and(|t| Instant::now() < t);
+                    let entries_len = app.entries.len();
+                    if entries_len == 0 {
+                        ui.add_space(48.0);
+                        ui.vertical_centered(|ui| {
+                            ui.label(caption_text(
+                                if app.query.is_empty() {
+                                    "No Items"
+                                } else {
+                                    "No Matching Items"
+                                },
+                                chrome::muted_of(ui),
+                            ));
+                        });
+                    }
+                    for i in 0..entries_len {
+                        let (name, path, is_dir, size, modified) = {
+                            let e = &app.entries[i];
+                            (e.name.clone(), e.path.clone(), e.is_dir, e.size, e.modified)
+                        };
+                        let selected = app.selected.contains(&path);
+                        let row_resp = list_row(
+                            ui, icons, &name, &path, is_dir, size, modified, selected,
+                        );
+                        if blocked {
+                            continue;
+                        }
+                        if is_dir && row_resp.clicked() {
+                            app.on_list_click(path, true, false);
+                            break;
+                        } else if row_resp.double_clicked() {
+                            app.on_list_click(path, is_dir, true);
+                            break;
+                        } else if row_resp.clicked() {
+                            app.on_list_click(path, is_dir, false);
+                        }
                     }
                 });
-            }
         });
 
-    egui::CentralPanel::default().show(ctx, |ui| {
-        let header = ui.horizontal(|ui| {
-            let name = sort_heading("Name", app.sort_key == SortKey::Name, app.sort_reversed);
-            if ui.button(RichText::new(name).strong()).clicked() {
-                app.set_sort(SortKey::Name);
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let date = sort_heading("Date", app.sort_key == SortKey::Time, app.sort_reversed);
-                if ui.button(RichText::new(date).strong()).clicked() {
-                    app.set_sort(SortKey::Time);
-                }
-                ui.add_space(80.0);
-                let size = sort_heading("Size", app.sort_key == SortKey::Size, app.sort_reversed);
-                if ui.button(RichText::new(size).strong()).clicked() {
-                    app.set_sort(SortKey::Size);
-                }
-            });
-        });
-        ui.separator();
-        ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                let blocked = app
-                    .ignore_list_until
-                    .is_some_and(|t| Instant::now() < t);
-                let entries_len = app.entries.len();
-                for i in 0..entries_len {
-                    let (name, path, is_dir, size, modified) = {
-                        let e = &app.entries[i];
-                        (e.name.clone(), e.path.clone(), e.is_dir, e.size, e.modified)
-                    };
-                    let selected = app.selected.contains(&path);
-                    let row_resp = list_row(
-                        ui,
-                        icons,
-                        &name,
-                        &path,
-                        is_dir,
-                        size,
-                        modified,
-                        selected,
-                    );
-                    if blocked {
-                        continue;
-                    }
-                    if is_dir && row_resp.clicked() {
-                        app.on_list_click(path, true, false);
-                        break;
-                    } else if row_resp.double_clicked() {
-                        app.on_list_click(path, is_dir, true);
-                        break;
-                    } else if row_resp.clicked() {
-                        app.on_list_click(path, is_dir, false);
-                    }
-                }
-            });
-        let _ = header;
-    });
-
-    if ctx.input(|i| i.key_pressed(Key::Backspace)) && app.new_folder.is_none() {
+    if ctx.input(|i| i.key_pressed(Key::Backspace))
+        && app.new_folder.is_none()
+        && !app.search_focused
+        && !app.path_focused
+        && !app.editing_path
+    {
         app.parent();
     }
-    if ctx.input(|i| i.key_pressed(Key::Enter) && !i.modifiers.shift) && app.overwrite.is_none() {
+    if ctx.input(|i| i.key_pressed(Key::Enter) && !i.modifiers.shift)
+        && app.overwrite.is_none()
+        && app.new_folder.is_none()
+        && !app.search_focused
+        && !app.path_focused
+        && !app.editing_path
+    {
         app.try_accept();
     }
     if ctx.input(|i| i.key_pressed(Key::H) && i.modifiers.ctrl) {
@@ -670,54 +612,470 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
         app.refresh();
     }
     if ctx.input(|i| i.key_pressed(Key::L) && i.modifiers.ctrl) {
-        // path bar is already editable
+        app.editing_path = true;
+        app.path_edit = if app.recent_mode {
+            RECENT_PLACE.to_string()
+        } else {
+            app.folder.display().to_string()
+        };
     }
     if ctx.input(|i| i.key_pressed(Key::F5)) {
         app.refresh();
     }
 
+    if app.new_folder.is_some() || app.overwrite.is_some() {
+        dim_overlay(ctx);
+    }
+
     if app.new_folder.is_some() {
-        egui::Window::new("New folder")
+        egui::Window::new("New Folder")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .order(egui::Order::Foreground)
+            .frame(sheet_frame(ctx))
             .show(ctx, |ui| {
+                ui.set_min_width(320.0);
+                ui.label(title_text("New Folder"));
+                ui.add_space(6.0);
+                ui.label(caption_text(
+                    "Enter a name for the folder.",
+                    chrome::muted_of(ui),
+                ));
+                ui.add_space(12.0);
                 if let Some(name) = app.new_folder.as_mut() {
-                    ui.add(egui::TextEdit::singleline(name).hint_text("Folder name"));
+                    well_edit(ui, name, "Folder Name", ui.available_width());
                 }
-                ui.horizontal(|ui| {
-                    if ui.button("Create").clicked() {
-                        app.create_folder();
-                    }
-                    if ui.button("Cancel").clicked() {
-                        app.new_folder = None;
-                    }
-                });
+                ui.add_space(16.0);
+                let (cancel, create) = trailing_actions(ui, "Cancel", "Create");
+                if create {
+                    app.create_folder();
+                }
+                if cancel {
+                    app.new_folder = None;
+                }
             });
     }
 
     if let Some(path) = app.overwrite.clone() {
-        egui::Window::new("Replace file?")
+        egui::Window::new("Replace File?")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .order(egui::Order::Foreground)
+            .frame(sheet_frame(ctx))
             .show(ctx, |ui| {
-                ui.label(format!(
-                    "{} already exists. Replace it?",
+                ui.set_min_width(340.0);
+                ui.label(title_text("Replace File?"));
+                ui.add_space(8.0);
+                ui.label(body_text(format!(
+                    "“{}” already exists. Do you want to replace it?",
                     path.file_name().unwrap_or_default().to_string_lossy()
-                ));
-                ui.horizontal(|ui| {
-                    if ui.button("Replace").clicked() {
+                )));
+                ui.add_space(16.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if destructive_button(ui, "Replace").clicked() {
                         app.confirm_overwrite();
                     }
-                    if ui.button("Cancel").clicked() {
+                    ui.add_space(8.0);
+                    if secondary_button(ui, "Cancel").clicked() {
                         app.overwrite = None;
                     }
                 });
             });
     }
+}
 
-    let _ = Sense::click();
+fn draw_toolbar(ui: &mut egui::Ui, app: &mut ChooserApp) {
+    let total = ui.available_width();
+    let stacked = total < 560.0;
+    if stacked {
+        draw_path_bar(ui, app);
+        ui.add_space(8.0);
+        let search = search_field(ui, &mut app.query, "Search", ui.available_width());
+        app.search_focused = search.has_focus();
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.set_min_height(BUTTON_H);
+        let search_w = (total * 0.30).clamp(160.0, 240.0);
+        let path_w = (total - search_w - 10.0).max(200.0);
+        ui.allocate_ui_with_layout(
+            Vec2::new(path_w, BUTTON_H),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.set_max_width(path_w);
+                draw_path_bar(ui, app);
+            },
+        );
+        let search = search_field(ui, &mut app.query, "Search", search_w);
+        app.search_focused = search.has_focus();
+    });
+}
+
+fn draw_path_bar(ui: &mut egui::Ui, app: &mut ChooserApp) {
+    let well = ui.visuals().extreme_bg_color;
+    let stroke = Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color);
+    Frame::new()
+        .fill(well)
+        .stroke(stroke)
+        .corner_radius(CornerRadius::same(8))
+        .inner_margin(Margin::symmetric(4, 0))
+        .show(ui, |ui| {
+            ui.set_min_height(BUTTON_H);
+            ui.set_max_height(BUTTON_H);
+            ui.horizontal(|ui| {
+                ui.set_min_height(BUTTON_H);
+                if toolbar_glyph_button(ui, Glyph::ChevronLeft) {
+                    app.parent();
+                }
+                let sep = ui.available_height().max(18.0);
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(1.0, sep * 0.55), Sense::hover());
+                ui.painter().rect_filled(
+                    rect,
+                    0.0,
+                    ui.visuals().widgets.noninteractive.bg_stroke.color,
+                );
+                if app.editing_path {
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(&mut app.path_edit)
+                            .desired_width(ui.available_width().max(80.0))
+                            .hint_text("Path")
+                            .font(FontId::proportional(BODY_PT))
+                            .frame(false),
+                    );
+                    app.path_focused = resp.has_focus();
+                    if resp.lost_focus() || ui.input(|i| i.key_pressed(Key::Enter)) {
+                        commit_path_edit(app);
+                    }
+                    if ui.input(|i| i.key_pressed(Key::Escape)) {
+                        app.editing_path = false;
+                        app.path_edit = if app.recent_mode {
+                            RECENT_PLACE.to_string()
+                        } else {
+                            app.folder.display().to_string()
+                        };
+                    }
+                } else {
+                    app.path_focused = false;
+                    draw_breadcrumbs(ui, app);
+                }
+            });
+        });
+}
+
+fn draw_footer(ui: &mut egui::Ui, app: &mut ChooserApp, theme: &OmarchyTheme) {
+    if let Some(err) = &app.error {
+        ui.colored_label(super::visuals::rgb(theme.red), err);
+        ui.add_space(6.0);
+    }
+    if !app.req.choices.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            for (i, choice) in app.req.choices.iter().enumerate() {
+                if choice.options.is_empty() {
+                    let mut on = app.choice_values[i] == "true";
+                    if ui.checkbox(&mut on, &choice.label).changed() {
+                        app.choice_values[i] = if on { "true" } else { "false" }.into();
+                    }
+                } else {
+                    ui.label(caption_text(&choice.label, chrome::muted_of(ui)));
+                    egui::ComboBox::from_id_salt(format!("choice-{i}"))
+                        .selected_text(&app.choice_values[i])
+                        .show_ui(ui, |ui| {
+                            for (id, label) in &choice.options {
+                                ui.selectable_value(&mut app.choice_values[i], id.clone(), label);
+                            }
+                        });
+                }
+            }
+        });
+        ui.add_space(8.0);
+    }
+
+    ui.spacing_mut().interact_size.y = BUTTON_H;
+    ui.spacing_mut().button_padding = egui::vec2(14.0, 8.0);
+    let save = matches!(app.req.mode, FileMode::Save | FileMode::SaveFiles);
+    let w = ui.available_width();
+    let stacked_name = save && w < 860.0;
+    let stacked_actions = w < 640.0;
+
+    if stacked_name {
+        well_edit(
+            ui,
+            &mut app.filename,
+            "Save As",
+            (w - 8.0).max(120.0),
+        );
+        ui.add_space(8.0);
+    }
+
+    if stacked_actions {
+        draw_footer_tools(ui, app);
+        ui.add_space(8.0);
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.set_min_height(BUTTON_H);
+            if primary_button(ui, &app.req.accept_label).clicked() {
+                app.try_accept();
+            }
+            ui.add_space(8.0);
+            if secondary_button(ui, "Cancel").clicked() {
+                app.outcome = Outcome::Cancel;
+            }
+        });
+        return;
+    }
+
+    ui.horizontal(|ui| {
+        ui.set_min_height(BUTTON_H);
+        draw_footer_tools(ui, app);
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.set_min_height(BUTTON_H);
+            if primary_button(ui, &app.req.accept_label).clicked() {
+                app.try_accept();
+            }
+            ui.add_space(8.0);
+            if secondary_button(ui, "Cancel").clicked() {
+                app.outcome = Outcome::Cancel;
+            }
+            if save && !stacked_name {
+                ui.add_space(10.0);
+                let remain = (ui.available_width() - 10.0).clamp(140.0, 280.0);
+                well_edit(ui, &mut app.filename, "Save As", remain);
+            }
+        });
+    });
+}
+
+fn draw_footer_tools(ui: &mut egui::Ui, app: &mut ChooserApp) {
+    if secondary_button(ui, "New Folder").clicked() {
+        app.new_folder = Some(String::new());
+    }
+    ui.add_space(6.0);
+    let mut hidden = app.show_hidden;
+    if labeled_toggle(ui, &mut hidden, "Hidden") {
+        app.show_hidden = hidden;
+        app.refresh();
+    }
+    if app.req.filters.is_empty() {
+        return;
+    }
+    ui.add_space(8.0);
+    ui.label(caption_text("Format", chrome::muted_of(ui)));
+    let label = app
+        .filter_index
+        .and_then(|i| app.req.filters.get(i))
+        .map(|f| f.label.clone())
+        .unwrap_or_else(|| "All files".into());
+    let filter_labels: Vec<(usize, String)> = app
+        .req
+        .filters
+        .iter()
+        .enumerate()
+        .map(|(i, f)| (i, f.label.clone()))
+        .collect();
+    let selected = app.filter_index;
+    let mut chosen = None;
+    let combo_w = if ui.available_width() < 180.0 { 110.0 } else { 148.0 };
+    egui::ComboBox::from_id_salt("filter")
+        .width(combo_w)
+        .selected_text(RichText::new(label).size(BODY_PT))
+        .show_ui(ui, |ui| {
+            for (i, name) in &filter_labels {
+                if ui.selectable_label(selected == Some(*i), name).clicked() {
+                    chosen = Some(*i);
+                }
+            }
+        });
+    if let Some(i) = chosen {
+        app.filter_index = Some(i);
+        app.refresh();
+    }
+}
+
+fn commit_path_edit(app: &mut ChooserApp) {
+    app.editing_path = false;
+    let raw = app.path_edit.trim();
+    if raw == RECENT_PLACE {
+        app.go_recent();
+    } else {
+        let path = PathBuf::from(raw);
+        if path.is_dir() {
+            app.go_folder(path);
+        } else {
+            app.path_edit = app.folder.display().to_string();
+        }
+    }
+}
+
+fn draw_breadcrumbs(ui: &mut egui::Ui, app: &mut ChooserApp) {
+    let crumbs = if app.recent_mode {
+        vec![("Recents".to_string(), PathBuf::new())]
+    } else {
+        breadcrumbs(&app.folder)
+    };
+    let visible = collapse_crumbs(&crumbs);
+    let mut go = None;
+    let mut edit = false;
+    ui.spacing_mut().item_spacing.x = 2.0;
+    for (i, (label, path, ellipsis)) in visible.iter().enumerate() {
+        if i > 0 {
+            ui.label(
+                RichText::new("/")
+                    .size(11.0)
+                    .color(chrome::muted_of(ui)),
+            );
+        }
+        let last = i + 1 == visible.len();
+        let shown = truncate_crumb(label);
+        let resp = crumb_chip(ui, &shown, last && !ellipsis);
+        if resp.clicked() {
+            if *ellipsis || last {
+                edit = true;
+            } else if !path.as_os_str().is_empty() {
+                go = Some(path.clone());
+            }
+        }
+    }
+    if let Some(path) = go {
+        app.go_folder(path);
+    }
+    if edit {
+        app.editing_path = true;
+        app.path_edit = if app.recent_mode {
+            RECENT_PLACE.to_string()
+        } else {
+            app.folder.display().to_string()
+        };
+    }
+}
+
+fn truncate_crumb(label: &str) -> String {
+    let n = label.chars().count();
+    if n <= 22 {
+        return label.to_string();
+    }
+    let head: String = label.chars().take(19).collect();
+    format!("{head}…")
+}
+
+fn collapse_crumbs(crumbs: &[(String, PathBuf)]) -> Vec<(String, PathBuf, bool)> {
+    if crumbs.len() <= 3 {
+        return crumbs
+            .iter()
+            .map(|(l, p)| (l.clone(), p.clone(), false))
+            .collect();
+    }
+    let first = crumbs.first().cloned().unwrap();
+    let last = crumbs.last().cloned().unwrap();
+    vec![
+        (first.0, first.1, false),
+        ("…".into(), PathBuf::new(), true),
+        (last.0, last.1, false),
+    ]
+}
+
+fn crumb_chip(ui: &mut egui::Ui, label: &str, current: bool) -> egui::Response {
+    let font = if current {
+        FontId::new(BODY_PT, chrome::semibold())
+    } else {
+        FontId::proportional(BODY_PT)
+    };
+    let color = if current {
+        ui.visuals().text_color()
+    } else {
+        chrome::muted_of(ui)
+    };
+    let galley = ui.fonts(|f| f.layout_no_wrap(label.to_owned(), font, color));
+    let pad_x = 8.0;
+    let size = Vec2::new(galley.size().x + pad_x * 2.0, BUTTON_H - 8.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    if resp.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(6), ui.visuals().widgets.hovered.bg_fill);
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let text_pos = Pos2::new(
+        rect.left() + pad_x,
+        rect.center().y - galley.size().y * 0.5,
+    );
+    ui.painter().galley(text_pos, galley, color);
+    resp
+}
+
+fn breadcrumbs(folder: &Path) -> Vec<(String, PathBuf)> {
+    let home = home_dir();
+    let mut chain = Vec::new();
+    let mut cur = folder.to_path_buf();
+    loop {
+        let label = if cur == home {
+            "Home".to_string()
+        } else if cur.as_os_str() == "/" {
+            "Computer".to_string()
+        } else {
+            cur.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| cur.display().to_string())
+        };
+        chain.push((label, cur.clone()));
+        if cur == home || cur.parent().is_none() {
+            break;
+        }
+        let Some(parent) = cur.parent() else { break };
+        if parent == cur {
+            break;
+        }
+        cur = parent.to_path_buf();
+    }
+    chain.reverse();
+    if chain.iter().any(|(_, p)| *p == home) {
+        chain.retain(|(_, p)| *p == home || p.starts_with(&home));
+    }
+    chain
+}
+
+fn draw_column_header(ui: &mut egui::Ui, app: &mut ChooserApp) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 22.0), Sense::hover());
+    let muted = chrome::muted_of(ui);
+    let font = FontId::new(CAPTION_PT, FontFamily::Proportional);
+    let date_w = 108.0;
+    let size_w = 72.0;
+    let pad = 10.0;
+    let date_x = rect.right() - pad - date_w;
+    let size_x = date_x - size_w;
+    let name = sort_heading("Name", app.sort_key == SortKey::Name, app.sort_reversed);
+    let size = sort_heading("Size", app.sort_key == SortKey::Size, app.sort_reversed);
+    let date = sort_heading("Date", app.sort_key == SortKey::Time, app.sort_reversed);
+
+    let name_rect = Rect::from_min_max(
+        Pos2::new(rect.left() + pad, rect.top()),
+        Pos2::new(size_x - 8.0, rect.bottom()),
+    );
+    let size_rect = Rect::from_min_max(
+        Pos2::new(size_x, rect.top()),
+        Pos2::new(date_x - 8.0, rect.bottom()),
+    );
+    let date_rect = Rect::from_min_max(
+        Pos2::new(date_x, rect.top()),
+        Pos2::new(rect.right() - pad, rect.bottom()),
+    );
+    let name_r = ui.interact(name_rect, ui.id().with("sort-name"), Sense::click());
+    let size_r = ui.interact(size_rect, ui.id().with("sort-size"), Sense::click());
+    let date_r = ui.interact(date_rect, ui.id().with("sort-date"), Sense::click());
+    ui.painter()
+        .text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, font.clone(), muted);
+    ui.painter()
+        .text(size_rect.right_center(), egui::Align2::RIGHT_CENTER, size, font.clone(), muted);
+    ui.painter()
+        .text(date_rect.right_center(), egui::Align2::RIGHT_CENTER, date, font, muted);
+    if name_r.clicked() {
+        app.set_sort(SortKey::Name);
+    }
+    if size_r.clicked() {
+        app.set_sort(SortKey::Size);
+    }
+    if date_r.clicked() {
+        app.set_sort(SortKey::Time);
+    }
 }
 
 /// Paint a file row with no child widgets so the row Sense::click is not stolen.
@@ -731,33 +1089,39 @@ fn list_row(
     modified: Option<std::time::SystemTime>,
     selected: bool,
 ) -> egui::Response {
-    let row_h = ui.spacing().interact_size.y.max(24.0);
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), row_h), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), ROW_H), Sense::click());
     let vis = ui.visuals();
+    let row = Rect::from_min_max(
+        Pos2::new(rect.left() + 4.0, rect.top() + 1.0),
+        Pos2::new(rect.right() - 4.0, rect.bottom() - 1.0),
+    );
     if selected {
         ui.painter()
-            .rect_filled(rect, 4.0, vis.selection.bg_fill);
+            .rect_filled(row, CornerRadius::same(8), vis.selection.bg_fill);
     } else if resp.hovered() {
         ui.painter()
-            .rect_filled(rect, 4.0, vis.widgets.hovered.bg_fill);
+            .rect_filled(row, CornerRadius::same(8), vis.widgets.hovered.bg_fill);
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
 
-    let icon_sz = 16.0;
-    let pad = 8.0;
-    let icon_rect = Rect::from_min_size(
-        Pos2::new(rect.left() + pad, rect.center().y - icon_sz * 0.5),
-        Vec2::splat(icon_sz),
-    );
-    icons.paint_at(ui, &file_icon_names(is_dir, path), icon_rect);
-
-    let font = FontId::proportional(14.0);
+    let pad = 10.0;
+    let font = FontId::proportional(BODY_PT);
+    let caption = FontId::proportional(chrome::CAPTION_PT);
     let fg = vis.text_color();
     let muted = vis.weak_text_color();
+    let icon_rect = Rect::from_center_size(
+        Pos2::new(row.left() + pad + ROW_ICON * 0.5, row.center().y),
+        Vec2::splat(ROW_ICON),
+    );
+    if is_dir {
+        glyphs::paint(ui, icon_rect, Glyph::Folder, fg);
+    } else {
+        icons.paint_at(ui, &file_icon_names(false, path), icon_rect);
+    }
     let date = format_time(modified);
-    let date_galley = ui.fonts(|f| f.layout_no_wrap(date, font.clone(), muted));
-    let date_x = rect.right() - pad - date_galley.size().x;
-    let date_y = rect.center().y - date_galley.size().y * 0.5;
+    let date_galley = ui.fonts(|f| f.layout_no_wrap(date, caption.clone(), muted));
+    let date_x = row.right() - pad - date_galley.size().x.max(96.0);
+    let date_y = row.center().y - date_galley.size().y * 0.5;
     ui.painter()
         .galley(Pos2::new(date_x, date_y), date_galley, muted);
 
@@ -766,16 +1130,16 @@ fn list_row(
     } else {
         format_size(size)
     };
-    let size_galley = ui.fonts(|f| f.layout_no_wrap(size_txt, font.clone(), muted));
-    let size_x = date_x - 24.0 - size_galley.size().x;
-    let size_y = rect.center().y - size_galley.size().y * 0.5;
+    let size_galley = ui.fonts(|f| f.layout_no_wrap(size_txt, caption, muted));
+    let size_x = date_x - 16.0 - size_galley.size().x.max(48.0);
+    let size_y = row.center().y - size_galley.size().y * 0.5;
     ui.painter()
         .galley(Pos2::new(size_x, size_y), size_galley, muted);
 
     let name_x = icon_rect.right() + 8.0;
     let name_w = (size_x - 12.0 - name_x).max(0.0);
     let name_galley = ui.fonts(|f| f.layout(name.to_owned(), font, fg, name_w));
-    let name_y = rect.center().y - name_galley.size().y * 0.5;
+    let name_y = row.center().y - name_galley.size().y * 0.5;
     ui.painter()
         .galley(Pos2::new(name_x, name_y), name_galley, fg);
     resp
@@ -807,5 +1171,58 @@ fn format_time(ts: Option<std::time::SystemTime>) -> String {
         return String::new();
     };
     let dt = chrono::DateTime::<chrono::Local>::from(ts);
-    dt.format("%Y-%m-%d %H:%M").to_string()
+    let now = chrono::Local::now();
+    let today = now.date_naive();
+    let day = dt.date_naive();
+    if day == today {
+        dt.format("%H:%M").to_string()
+    } else if day == today - chrono::Duration::days(1) {
+        "Yesterday".to_string()
+    } else if dt.format("%Y").to_string() == now.format("%Y").to_string() {
+        dt.format("%b %d").to_string()
+    } else {
+        dt.format("%b %d, %Y").to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn breadcrumbs_start_at_home() {
+        let home = home_dir();
+        let docs = home.join("Documents");
+        let crumbs = breadcrumbs(&docs);
+        assert_eq!(crumbs.first().map(|(l, _)| l.as_str()), Some("Home"));
+        assert!(crumbs.iter().any(|(l, _)| l == "Documents" || docs.ends_with(l)));
+    }
+
+    #[test]
+    fn collapse_keeps_short_paths() {
+        let crumbs = vec![
+            ("Home".into(), PathBuf::from("/home")),
+            ("Downloads".into(), PathBuf::from("/home/Downloads")),
+        ];
+        assert_eq!(collapse_crumbs(&crumbs).len(), 2);
+    }
+
+    #[test]
+    fn collapse_long_paths_to_ellipsis() {
+        let crumbs: Vec<(String, PathBuf)> = (0..6)
+            .map(|i| (format!("d{i}"), PathBuf::from(format!("/{i}"))))
+            .collect();
+        let vis = collapse_crumbs(&crumbs);
+        assert_eq!(vis.len(), 3);
+        assert!(vis[1].2);
+        assert_eq!(vis[2].0, "d5");
+    }
+
+    #[test]
+    fn today_formats_as_time() {
+        let now = std::time::SystemTime::now();
+        let s = format_time(Some(now));
+        assert!(s.contains(':'), "today should be HH:MM, got {s}");
+        assert!(!s.contains("Yesterday"));
+    }
 }

@@ -1,8 +1,11 @@
-use super::{cancelled, run_native};
+use super::chrome::{
+    body_text, caption_text, muted_of, primary_button, secondary_button, title_text,
+    trailing_actions,
+};
+use super::{cancelled, run_native_sized};
 use crate::dict::Choice;
 use crate::paths::{face_image, real_name, whoami};
-use crate::theme::OmarchyTheme;
-use egui::RichText;
+use egui::{Frame, Margin};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -145,9 +148,9 @@ fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult
         _ => Vec::new(),
     };
     let size = match &kind {
-        PromptKind::Account(_) => [440.0, 460.0],
-        PromptKind::Background { .. } => [460.0, 280.0],
-        _ => [520.0, 280.0],
+        PromptKind::Account(_) => [400.0, 480.0],
+        PromptKind::Background { .. } => [440.0, 300.0],
+        _ => [440.0, 280.0],
     };
     let state = Arc::new(Mutex::new(PromptApp {
         kind,
@@ -156,9 +159,10 @@ fn run_prompt(kind: PromptKind, token: CancellationToken) -> Option<PromptResult
         background_result: None,
     }));
     let ui_state = Arc::clone(&state);
-    let _ = run_native(
+    let _ = run_native_sized(
         title,
         size,
+        [360.0, 240.0],
         PromptUi {
             state: ui_state,
             token,
@@ -224,7 +228,6 @@ impl eframe::App for PromptUi {
             return;
         }
         ctx.request_repaint_after(Duration::from_millis(120));
-        let theme = OmarchyTheme::load();
         let mut close = false;
         let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
         let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
@@ -256,17 +259,24 @@ impl eframe::App for PromptUi {
             if app.accepted.is_some() || app.background_result.is_some() {
                 close = true;
             } else {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.add_space(8.0);
+                egui::CentralPanel::default()
+                    .frame(
+                        Frame::new()
+                            .fill(ctx.style().visuals.panel_fill)
+                            .inner_margin(Margin::symmetric(24, 20)),
+                    )
+                    .show(ctx, |ui| {
+                    let muted = muted_of(ui);
                     match &app.kind {
                         PromptKind::Access(req) => {
-                            ui.label(RichText::new(&req.title).size(18.0).strong());
+                            ui.label(title_text(&req.title));
                             if !req.subtitle.is_empty() {
-                                ui.label(RichText::new(&req.subtitle).color(super::visuals::rgb(theme.muted)));
+                                ui.add_space(6.0);
+                                ui.label(body_text(&req.subtitle).color(muted));
                             }
                             if !req.body.is_empty() {
-                                ui.add_space(8.0);
-                                ui.label(&req.body);
+                                ui.add_space(10.0);
+                                ui.label(body_text(&req.body));
                             }
                         }
                         PromptKind::Background {
@@ -274,64 +284,52 @@ impl eframe::App for PromptUi {
                             subtitle,
                             body,
                         } => {
-                            ui.label(RichText::new(title).size(18.0).strong());
+                            ui.label(title_text(title));
                             if !subtitle.is_empty() {
-                                ui.label(
-                                    RichText::new(subtitle).color(super::visuals::rgb(theme.muted)),
-                                );
+                                ui.add_space(6.0);
+                                ui.label(body_text(subtitle).color(muted));
                             }
                             if !body.is_empty() {
-                                ui.add_space(8.0);
-                                ui.label(body);
+                                ui.add_space(10.0);
+                                ui.label(body_text(body).color(muted));
                             }
                         }
                         PromptKind::Account(req) => {
-                            ui.label(RichText::new(&req.title).size(18.0).strong());
-                            if !req.subtitle.is_empty() {
-                                ui.add_space(6.0);
-                                ui.label(
-                                    RichText::new(&req.subtitle)
-                                        .color(super::visuals::rgb(theme.muted)),
-                                );
-                            }
-                            ui.add_space(12.0);
-                            if let Some(tex) = self.account_avatar.as_ref() {
-                                ui.with_layout(
-                                    egui::Layout::top_down(egui::Align::Center),
-                                    |ui| {
-                                        ui.add(
-                                            egui::Image::new(tex)
-                                                .fit_to_exact_size(egui::vec2(96.0, 96.0))
-                                                .corner_radius(48.0),
-                                        );
-                                    },
-                                );
-                                ui.add_space(8.0);
-                            }
-                            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                                if !req.real_name.is_empty() {
-                                    ui.label(RichText::new(&req.real_name).size(16.0).strong());
+                            ui.vertical_centered(|ui| {
+                                ui.label(title_text(&req.title));
+                                if !req.subtitle.is_empty() {
+                                    ui.add_space(8.0);
+                                    ui.label(body_text(&req.subtitle).color(muted));
                                 }
-                                ui.label(
-                                    RichText::new(&req.username)
-                                        .color(super::visuals::rgb(theme.muted)),
-                                );
+                                ui.add_space(16.0);
+                                if let Some(tex) = self.account_avatar.as_ref() {
+                                    ui.add(
+                                        egui::Image::new(tex)
+                                            .fit_to_exact_size(egui::vec2(88.0, 88.0))
+                                            .corner_radius(44.0),
+                                    );
+                                    ui.add_space(10.0);
+                                }
+                                if !req.real_name.is_empty() {
+                                    ui.label(title_text(&req.real_name));
+                                }
+                                ui.label(caption_text(&req.username, muted));
                             });
                         }
                         PromptKind::Wallpaper { uri } => {
-                            ui.label(RichText::new("Set Omarchy wallpaper?").size(18.0).strong());
+                            ui.label(title_text("Set Wallpaper?"));
                             ui.add_space(8.0);
-                            ui.label(uri);
+                            ui.label(body_text(uri).color(muted));
                         }
                         PromptKind::Confirm {
                             title,
                             subtitle,
                             ..
                         } => {
-                            ui.label(RichText::new(title).size(18.0).strong());
+                            ui.label(title_text(title));
                             if !subtitle.is_empty() {
                                 ui.add_space(8.0);
-                                ui.label(RichText::new(subtitle).color(super::visuals::rgb(theme.muted)));
+                                ui.label(body_text(subtitle).color(muted));
                             }
                         }
                     }
@@ -353,7 +351,7 @@ impl eframe::App for PromptUi {
                         None
                     };
                     if let Some(choices) = access_choices {
-                        ui.add_space(8.0);
+                        ui.add_space(12.0);
                         for (i, label, options) in choices {
                             if options.is_empty() {
                                 let mut on = app.choice_values[i] == "true";
@@ -363,7 +361,7 @@ impl eframe::App for PromptUi {
                                 }
                             } else {
                                 ui.horizontal(|ui| {
-                                    ui.label(&label);
+                                    ui.label(body_text(&label));
                                     let current = app.choice_values[i].clone();
                                     egui::ComboBox::from_id_salt(format!("access-choice-{i}"))
                                         .selected_text(
@@ -387,18 +385,18 @@ impl eframe::App for PromptUi {
                             }
                         }
                     }
-                    ui.add_space(16.0);
+                    ui.add_space((ui.available_height() - 48.0).max(16.0));
                     if matches!(app.kind, PromptKind::Background { .. }) {
-                        ui.add_space(16.0);
                         ui.horizontal(|ui| {
-                            if ui.button("Deny").clicked() {
+                            if secondary_button(ui, "Don't Allow").clicked() {
                                 app.background_result = Some(0);
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button(RichText::new("Allow").strong()).clicked() {
+                                if primary_button(ui, "Allow").clicked() {
                                     app.background_result = Some(1);
                                 }
-                                if ui.button("Allow once").clicked() {
+                                ui.add_space(8.0);
+                                if secondary_button(ui, "Allow Once").clicked() {
                                     app.background_result = Some(2);
                                 }
                             });
@@ -414,14 +412,13 @@ impl eframe::App for PromptUi {
                             }
                             _ => ("Cancel".into(), "Allow".into()),
                         };
-                        ui.horizontal(|ui| {
-                            if ui.button(deny).clicked() {
-                                app.accepted = Some(false);
-                            }
-                            if ui.button(RichText::new(grant).strong()).clicked() {
-                                app.accepted = Some(true);
-                            }
-                        });
+                        let (cancelled, accepted) = trailing_actions(ui, &deny, &grant);
+                        if cancelled {
+                            app.accepted = Some(false);
+                        }
+                        if accepted {
+                            app.accepted = Some(true);
+                        }
                     }
                 });
                 if matches!(app.kind, PromptKind::Background { .. }) {

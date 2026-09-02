@@ -1,8 +1,6 @@
-use egui::{ColorImage, TextureHandle, TextureOptions, Vec2};
+use egui::{ColorImage, TextureHandle, TextureOptions};
 use std::collections::HashMap;
 use std::path::Path;
-
-const ICON_PT: f32 = 16.0;
 
 #[derive(Default)]
 pub struct IconCache {
@@ -10,55 +8,43 @@ pub struct IconCache {
 }
 
 impl IconCache {
-    pub fn show(&mut self, ui: &mut egui::Ui, names: &[String]) {
-        self.paint(ui, names);
-    }
-
-    pub fn show_names(&mut self, ui: &mut egui::Ui, names: &[&str]) {
-        let owned: Vec<String> = names.iter().map(|s| (*s).to_string()).collect();
-        self.paint(ui, &owned);
-    }
-
-    pub fn button(&mut self, ui: &mut egui::Ui, names: &[&str], fallback: &str) -> bool {
-        let owned: Vec<String> = names.iter().map(|s| (*s).to_string()).collect();
-        if let Some(tex) = self.get(ui.ctx(), &owned) {
-            ui.add(egui::ImageButton::new((tex.id(), Vec2::splat(ICON_PT))))
-                .clicked()
-        } else {
-            ui.button(fallback).clicked()
-        }
-    }
-
-    pub fn paint_at(&mut self, ui: &egui::Ui, names: &[String], rect: egui::Rect) {
-        if let Some(tex) = self.get(ui.ctx(), names) {
+    pub fn paint_at(&mut self, ui: &egui::Ui, names: &[String], rect: egui::Rect) -> bool {
+        let pt = rect.width().max(rect.height());
+        if let Some(tex) = self.get(ui.ctx(), names, pt) {
             ui.painter().image(
                 tex.id(),
                 rect,
                 egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
+            true
+        } else {
+            false
         }
     }
 
-    fn paint(&mut self, ui: &mut egui::Ui, names: &[String]) {
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(ICON_PT), egui::Sense::hover());
-        self.paint_at(ui, names, rect);
-    }
-
-    fn get(&mut self, ctx: &egui::Context, names: &[String]) -> Option<TextureHandle> {
-        let key = names.join("|");
+    fn get(&mut self, ctx: &egui::Context, names: &[String], pt: f32) -> Option<TextureHandle> {
+        let px = ((pt * ctx.pixels_per_point()).round() as u32).clamp(16, 128);
+        let key = format!("{px}:{}", names.join("|"));
         if let Some(hit) = self.textures.get(&key) {
             return hit.clone();
         }
-        let px = ((ICON_PT * ctx.pixels_per_point()).round() as u32).clamp(16, 64);
-        let tex = crate::desktop::resolve_file_icon(names).and_then(|path| {
-            load_pixels(&path, px).map(|img| {
-                ctx.load_texture(format!("icon:{key}"), img, TextureOptions::LINEAR)
-            })
+        let tex = resolve_pixels(names, px).map(|img| {
+            ctx.load_texture(format!("icon:{key}"), img, TextureOptions::LINEAR)
         });
         self.textures.insert(key, tex.clone());
         tex
     }
+}
+
+fn resolve_pixels(names: &[String], px: u32) -> Option<ColorImage> {
+    for name in names {
+        let path = Path::new(name);
+        if path.is_absolute() && path.is_file() {
+            return load_pixels(path, px);
+        }
+    }
+    crate::desktop::resolve_file_icon(names).and_then(|path| load_pixels(&path, px))
 }
 
 fn load_pixels(path: &Path, px: u32) -> Option<ColorImage> {
