@@ -6,7 +6,7 @@ use crate::theme::OmarchyTheme;
 use egui::{Align, Key, Layout, RichText, ScrollArea, Sense};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -96,6 +96,7 @@ struct ChooserApp {
     sort_key: SortKey,
     sort_reversed: bool,
     recent_mode: bool,
+    last_click: Option<(PathBuf, Instant)>,
 }
 
 impl ChooserApp {
@@ -136,6 +137,7 @@ impl ChooserApp {
             sort_key: SortKey::Name,
             sort_reversed: false,
             recent_mode: false,
+            last_click: None,
         };
         app.refresh();
         app
@@ -281,6 +283,30 @@ impl ChooserApp {
             }
         } else {
             self.selected = vec![path];
+        }
+    }
+
+    fn on_list_click(&mut self, path: PathBuf, is_dir: bool) {
+        let now = Instant::now();
+        let double = self.last_click.as_ref().is_some_and(|(prev, at)| {
+            *prev == path && now.duration_since(*at) <= Duration::from_millis(500)
+        });
+        if double {
+            self.last_click = None;
+            if is_dir {
+                self.enter(path);
+            } else {
+                self.selected = vec![path];
+                self.try_accept();
+            }
+            return;
+        }
+        self.last_click = Some((path.clone(), now));
+        self.toggle_select(path.clone());
+        if !is_dir && self.req.mode == FileMode::Save {
+            if let Some(n) = path.file_name() {
+                self.filename = n.to_string_lossy().into_owned();
+            }
         }
     }
 
@@ -587,43 +613,34 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme) {
                         (e.name.clone(), e.path.clone(), e.is_dir, e.size, e.modified)
                     };
                     let selected = app.selected.contains(&path);
-                    let mut activate = false;
-                    let mut toggle = false;
-                    ui.horizontal(|ui| {
-                        let glyph = super::fonts::file_glyph(is_dir, &name);
-                        let label = format!("{glyph}  {name}");
-                        let resp = ui.selectable_label(selected, label);
-                        // egui reports clicked() on the double-click frame too;
-                        // only treat it as a single click when it is not a double-click.
-                        if resp.double_clicked() {
-                            activate = true;
-                        } else if resp.clicked() {
-                            toggle = true;
-                        }
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.label(format_time(modified));
-                            ui.add_space(24.0);
-                            ui.label(if is_dir {
-                                String::new()
-                            } else {
-                                format_size(size)
-                            });
+                    let row_h = ui.spacing().interact_size.y.max(22.0);
+                    let (row_rect, row_resp) =
+                        ui.allocate_exact_size(egui::vec2(ui.available_width(), row_h), Sense::click());
+                    let mut row_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(row_rect)
+                            .layout(Layout::left_to_right(Align::Center)),
+                    );
+                    if selected {
+                        row_ui.painter().rect_filled(
+                            row_rect,
+                            4.0,
+                            row_ui.visuals().selection.bg_fill,
+                        );
+                    }
+                    let glyph = super::fonts::file_glyph(is_dir, &name);
+                    row_ui.label(format!("{glyph}  {name}"));
+                    row_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.label(format_time(modified));
+                        ui.add_space(24.0);
+                        ui.label(if is_dir {
+                            String::new()
+                        } else {
+                            format_size(size)
                         });
                     });
-                    if activate {
-                        if is_dir {
-                            app.enter(path);
-                        } else {
-                            app.selected = vec![path];
-                            app.try_accept();
-                        }
-                    } else if toggle {
-                        app.toggle_select(path.clone());
-                        if !is_dir && app.req.mode == FileMode::Save {
-                            if let Some(n) = path.file_name() {
-                                app.filename = n.to_string_lossy().into_owned();
-                            }
-                        }
+                    if row_resp.clicked() {
+                        app.on_list_click(path, is_dir);
                     }
                 }
             });
