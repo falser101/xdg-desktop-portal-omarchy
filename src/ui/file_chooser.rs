@@ -8,7 +8,7 @@ use crate::theme::OmarchyTheme;
 use egui::{Align, Key, Layout, RichText, ScrollArea, Sense};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -106,7 +106,6 @@ struct ChooserApp {
     sort_key: SortKey,
     sort_reversed: bool,
     recent_mode: bool,
-    last_click: Option<(PathBuf, Instant)>,
 }
 
 impl ChooserApp {
@@ -147,7 +146,6 @@ impl ChooserApp {
             sort_key: SortKey::Name,
             sort_reversed: false,
             recent_mode: false,
-            last_click: None,
         };
         app.refresh();
         app
@@ -296,13 +294,8 @@ impl ChooserApp {
         }
     }
 
-    fn on_list_click(&mut self, path: PathBuf, is_dir: bool) {
-        let now = Instant::now();
-        let double = self.last_click.as_ref().is_some_and(|(prev, at)| {
-            *prev == path && now.duration_since(*at) <= Duration::from_millis(500)
-        });
+    fn on_list_click(&mut self, path: PathBuf, is_dir: bool, double: bool) {
         if double {
-            self.last_click = None;
             if is_dir {
                 self.enter(path);
             } else {
@@ -311,7 +304,6 @@ impl ChooserApp {
             }
             return;
         }
-        self.last_click = Some((path.clone(), now));
         self.toggle_select(path.clone());
         if !is_dir && self.req.mode == FileMode::Save {
             if let Some(n) = path.file_name() {
@@ -631,12 +623,16 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
                     };
                     let selected = app.selected.contains(&path);
                     let row_h = ui.spacing().interact_size.y.max(22.0);
-                    let (row_rect, row_resp) =
-                        ui.allocate_exact_size(egui::vec2(ui.available_width(), row_h), Sense::click());
+                    let id = ui.id().with(("file-row", path.as_os_str()));
+                    let (row_rect, _) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), row_h),
+                        Sense::hover(),
+                    );
                     let mut row_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(row_rect)
-                            .layout(Layout::left_to_right(Align::Center)),
+                            .layout(Layout::left_to_right(Align::Center))
+                            .sense(Sense::hover()),
                     );
                     if selected {
                         row_ui.painter().rect_filled(
@@ -657,8 +653,17 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
                             format_size(size)
                         });
                     });
-                    if row_resp.clicked() {
-                        app.on_list_click(path, is_dir);
+                    // Interact on top of icon/name widgets so the whole row
+                    // receives click + double-click (egui child labels steal
+                    // the allocate_exact_size Sense::click otherwise).
+                    let row_resp = ui.interact(row_rect, id, Sense::click());
+                    if row_resp.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    if row_resp.double_clicked() {
+                        app.on_list_click(path, is_dir, true);
+                    } else if row_resp.clicked() {
+                        app.on_list_click(path, is_dir, false);
                     }
                 }
             });
