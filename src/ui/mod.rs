@@ -57,11 +57,36 @@ pub fn run_native_sized(
         crate::APP_ID,
         options,
         Box::new(|cc| {
-            fonts::install(&cc.egui_ctx);
-            visuals::apply(&cc.egui_ctx, &crate::theme::OmarchyTheme::load());
-            Ok(Box::new(app))
+            let theme = crate::theme::OmarchyTheme::load();
+            fonts::install(&cc.egui_ctx, &theme.font_family);
+            visuals::apply(&cc.egui_ctx, &theme);
+            Ok(Box::new(ThemedApp {
+                inner: app,
+                applied: theme,
+            }))
         }),
     )
+}
+
+struct ThemedApp<A> {
+    inner: A,
+    applied: crate::theme::OmarchyTheme,
+}
+
+impl<A: eframe::App> eframe::App for ThemedApp<A> {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let theme = crate::theme::OmarchyTheme::load();
+        if theme != self.applied {
+            if theme.font_family != self.applied.font_family {
+                fonts::install(ctx, &theme.font_family);
+            }
+            visuals::apply(ctx, &theme);
+            self.applied = theme;
+            ctx.request_repaint();
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        self.inner.update(ctx, frame);
+    }
 }
 
 pub async fn on_ui_thread<T, F>(f: F) -> Option<T>

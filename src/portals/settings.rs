@@ -38,15 +38,10 @@ impl Settings {
                 };
                 owned(s.to_string())
             }
-            (GNOME_INTERFACE, "gtk-theme") => {
-                let s = match theme.mode {
-                    crate::theme::ColorScheme::PreferLight => "Adwaita",
-                    _ => "Adwaita-dark",
-                };
-                owned(s.to_string())
-            }
-            (GNOME_INTERFACE, "icon-theme") => owned("Yaru-blue".to_string()),
-            (GNOME_INTERFACE, "text-scaling-factor") => owned(1.0f64),
+            (GNOME_INTERFACE, "gtk-theme") => owned(theme.gtk_theme.clone()),
+            (GNOME_INTERFACE, "icon-theme") => owned(theme.icon_theme.clone()),
+            (GNOME_INTERFACE, "font-name") => owned(format!("{},  {}", theme.font_family, theme.font_pt)),
+            (GNOME_INTERFACE, "text-scaling-factor") => owned(f64::from(theme.type_scale())),
             _ => None,
         }
     }
@@ -81,6 +76,7 @@ impl Settings {
                     "color-scheme",
                     "gtk-theme",
                     "icon-theme",
+                    "font-name",
                     "text-scaling-factor",
                 ]
                 .as_slice(),
@@ -216,6 +212,41 @@ pub async fn watch_theme(connection: Connection) {
                         APPEARANCE,
                         "accent-color",
                         Value::from((next.accent[0], next.accent[1], next.accent[2])),
+                    )
+                    .await;
+                }
+                if prev.icon_theme != next.icon_theme {
+                    let _ = Settings::setting_changed(
+                        iface.signal_emitter(),
+                        GNOME_INTERFACE,
+                        "icon-theme",
+                        Value::from(next.icon_theme.clone()),
+                    )
+                    .await;
+                }
+                if prev.gtk_theme != next.gtk_theme {
+                    let _ = Settings::setting_changed(
+                        iface.signal_emitter(),
+                        GNOME_INTERFACE,
+                        "gtk-theme",
+                        Value::from(next.gtk_theme.clone()),
+                    )
+                    .await;
+                }
+                if prev.font_family != next.font_family || (prev.font_pt - next.font_pt).abs() > 0.01
+                {
+                    let _ = Settings::setting_changed(
+                        iface.signal_emitter(),
+                        GNOME_INTERFACE,
+                        "font-name",
+                        Value::from(format!("{},  {}", next.font_family, next.font_pt)),
+                    )
+                    .await;
+                    let _ = Settings::setting_changed(
+                        iface.signal_emitter(),
+                        GNOME_INTERFACE,
+                        "text-scaling-factor",
+                        Value::from(f64::from(next.type_scale())),
                     )
                     .await;
                 }

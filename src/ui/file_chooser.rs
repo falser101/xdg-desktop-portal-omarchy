@@ -1,7 +1,7 @@
 use super::chrome::{
     self, body_text, caption_text, destructive_button, dim_overlay, hairline, labeled_toggle,
     primary_button, search_field, secondary_button, section_label, sheet_frame, sidebar_item,
-    title_text, toolbar_glyph_button, trailing_actions, well_edit, BODY_PT, BUTTON_H, CAPTION_PT,
+    title_text, toolbar_glyph_button, trailing_actions, well_edit, body_pt, caption_pt, BUTTON_H,
     ROW_H, ROW_ICON, SIDEBAR_W,
 };
 use super::glyphs::{self, Glyph};
@@ -484,6 +484,11 @@ impl eframe::App for ChooserUi {
         }
         ctx.request_repaint_after(Duration::from_millis(120));
         self.thumbs.poll(ctx);
+        let theme = OmarchyTheme::load();
+        if theme.icon_theme != self.theme.icon_theme {
+            self.icons = IconCache::default();
+        }
+        self.theme = theme;
 
         let mut close = false;
         {
@@ -783,7 +788,7 @@ fn draw_path_bar(ui: &mut egui::Ui, app: &mut ChooserApp) {
                         egui::TextEdit::singleline(&mut app.path_edit)
                             .desired_width(ui.available_width().max(80.0))
                             .hint_text("Path")
-                            .font(FontId::proportional(BODY_PT))
+                            .font(FontId::proportional(body_pt()))
                             .frame(false),
                     );
                     app.path_focused = resp.has_focus();
@@ -920,7 +925,7 @@ fn draw_footer_tools(ui: &mut egui::Ui, app: &mut ChooserApp) {
     let combo_w = if ui.available_width() < 180.0 { 110.0 } else { 148.0 };
     egui::ComboBox::from_id_salt("filter")
         .width(combo_w)
-        .selected_text(RichText::new(label).size(BODY_PT))
+        .selected_text(RichText::new(label).size(body_pt()))
         .show_ui(ui, |ui| {
             for (i, name) in &filter_labels {
                 if ui.selectable_label(selected == Some(*i), name).clicked() {
@@ -1018,9 +1023,9 @@ fn collapse_crumbs(crumbs: &[(String, PathBuf)]) -> Vec<(String, PathBuf, bool)>
 
 fn crumb_chip(ui: &mut egui::Ui, label: &str, current: bool) -> egui::Response {
     let font = if current {
-        FontId::new(BODY_PT, chrome::semibold())
+        FontId::new(body_pt(), chrome::semibold())
     } else {
-        FontId::proportional(BODY_PT)
+        FontId::proportional(body_pt())
     };
     let color = if current {
         ui.visuals().text_color()
@@ -1078,7 +1083,7 @@ fn breadcrumbs(folder: &Path) -> Vec<(String, PathBuf)> {
 fn draw_column_header(ui: &mut egui::Ui, app: &mut ChooserApp) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 22.0), Sense::hover());
     let muted = chrome::muted_of(ui);
-    let font = FontId::new(CAPTION_PT, FontFamily::Proportional);
+    let font = FontId::new(caption_pt(), FontFamily::Proportional);
     let date_w = 108.0;
     let size_w = 72.0;
     let pad = 10.0;
@@ -1163,8 +1168,8 @@ fn list_row_inner(
     }
 
     let pad = 10.0;
-    let font = FontId::proportional(BODY_PT);
-    let caption = FontId::proportional(chrome::CAPTION_PT);
+    let font = FontId::proportional(body_pt());
+    let caption = FontId::proportional(caption_pt());
     let fg = vis.text_color();
     let muted = vis.weak_text_color();
     let icon_rect = Rect::from_center_size(

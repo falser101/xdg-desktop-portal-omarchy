@@ -1,35 +1,32 @@
 use egui::{FontData, FontDefinitions, FontFamily};
+use std::path::PathBuf;
+use std::process::Command;
 
 /// Noto Sans CJK *.ttc face order: JP, KR, SC, TC, HK.
 const CJK_SC: u32 = 2;
 
-pub fn install(ctx: &egui::Context) {
+pub fn install(ctx: &egui::Context, family: &str) {
     let mut fonts = FontDefinitions::default();
+    let family = family.trim();
+    let family = if family.is_empty() { "Inter" } else { family };
 
-    if let Some(data) = load_first(&[
-        "/usr/share/fonts/inter/Inter-Regular.ttf",
-        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/TTF/NotoSans-Regular.ttf",
-    ])
-    .or_else(|| load_under_data_home("Inter/extras/ttf/Inter-Regular.ttf"))
+    if let Some((path, index)) = fc_match(&format!("{family}:style=Regular"))
+        .or_else(|| fc_match(family))
+        .or_else(|| fallback_ui_regular())
     {
-        insert(&mut fonts, "ui", data, 0);
-        prefer(&mut fonts, FontFamily::Proportional, "ui");
+        if let Some(data) = std::fs::read(&path).ok() {
+            insert(&mut fonts, "ui", data, index);
+            prefer(&mut fonts, FontFamily::Proportional, "ui");
+        }
     }
 
-    if let Some(data) = load_first(&[
-        "/usr/share/fonts/inter/Inter-Medium.ttf",
-        "/usr/share/fonts/noto/NotoSans-Medium.ttf",
-        "/usr/share/fonts/TTF/NotoSans-Medium.ttf",
-    ])
-    .or_else(|| load_under_data_home("Inter/extras/ttf/Inter-Medium.ttf"))
+    if let Some((path, index)) = fc_match(&format!("{family}:style=Medium"))
+        .or_else(|| fc_match(&format!("{family}:style=SemiBold")))
+        .or_else(|| fallback_ui_medium())
     {
-        insert(&mut fonts, "ui-medium", data, 0);
-    } else if let Some(data) = load_first(&[
-        "/usr/share/fonts/noto/NotoSans-Bold.ttf",
-        "/usr/share/fonts/inter/Inter-SemiBold.ttf",
-    ]) {
-        insert(&mut fonts, "ui-medium", data, 0);
+        if let Some(data) = std::fs::read(&path).ok() {
+            insert(&mut fonts, "ui-medium", data, index);
+        }
     }
 
     let semibold = FontFamily::Name("semibold".into());
@@ -90,13 +87,59 @@ fn fallback(fonts: &mut FontDefinitions, family: FontFamily, name: &str) {
     }
 }
 
-fn load_first(paths: &[&str]) -> Option<Vec<u8>> {
-    paths.iter().find_map(|p| std::fs::read(p).ok())
+fn fc_match(query: &str) -> Option<(PathBuf, u32)> {
+    let out = Command::new("fc-match")
+        .args([query, "-f", "%{file}\n%{index}\n"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut lines = text.lines();
+    let file = lines.next()?.trim();
+    if file.is_empty() {
+        return None;
+    }
+    let index = lines
+        .next()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+    Some((PathBuf::from(file), index))
 }
 
-fn load_under_data_home(rel: &str) -> Option<Vec<u8>> {
-    let base = dirs::data_local_dir()?.join("fonts").join(rel);
-    std::fs::read(base).ok()
+fn fallback_ui_regular() -> Option<(PathBuf, u32)> {
+    first_existing(&[
+        "/usr/share/fonts/inter/Inter-Regular.ttf",
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/TTF/NotoSans-Regular.ttf",
+    ])
+    .or_else(|| {
+        dirs::data_local_dir().and_then(|d| {
+            first_existing(&[d.join("fonts/Inter/extras/ttf/Inter-Regular.ttf")])
+        })
+    })
+}
+
+fn fallback_ui_medium() -> Option<(PathBuf, u32)> {
+    first_existing(&[
+        "/usr/share/fonts/inter/Inter-Medium.ttf",
+        "/usr/share/fonts/noto/NotoSans-Medium.ttf",
+        "/usr/share/fonts/TTF/NotoSans-Medium.ttf",
+        "/usr/share/fonts/noto/NotoSans-Bold.ttf",
+        "/usr/share/fonts/inter/Inter-SemiBold.ttf",
+    ])
+}
+
+fn first_existing<P: AsRef<std::path::Path>>(paths: &[P]) -> Option<(PathBuf, u32)> {
+    paths.iter().find_map(|p| {
+        let p = p.as_ref();
+        p.is_file().then(|| (p.to_path_buf(), 0))
+    })
+}
+
+fn load_first(paths: &[&str]) -> Option<Vec<u8>> {
+    paths.iter().find_map(|p| std::fs::read(p).ok())
 }
 
 #[cfg(test)]
@@ -114,6 +157,16 @@ mod tests {
             "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
         ]);
         assert!(hit.is_some() || std::path::Path::new("/usr/share/fonts").is_dir());
+    }
+
+    #[test]
+    fn fc_match_resolves_a_ui_family() {
+        let hit = super::fc_match("Inter:style=Regular").or_else(|| super::fc_match("sans-serif"));
+        if hit.is_none() {
+            return;
+        }
+        let (path, _) = hit.unwrap();
+        assert!(path.is_file(), "fc-match path missing: {path:?}");
     }
 
     #[test]

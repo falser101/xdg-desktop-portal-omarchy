@@ -4,10 +4,33 @@ use egui::{
     Align, Align2, Color32, CornerRadius, FontFamily, FontId, Frame, Margin, Order, Pos2, Rect,
     RichText, Sense, Stroke, Vec2,
 };
+use std::sync::atomic::{AtomicU32, Ordering};
 
 pub const TITLE_PT: f32 = 17.0;
 pub const BODY_PT: f32 = 13.0;
 pub const CAPTION_PT: f32 = 11.0;
+static TYPE_SCALE_MILLI: AtomicU32 = AtomicU32::new(1000);
+
+pub fn set_type_scale(scale: f32) {
+    let milli = (scale.clamp(0.85, 1.6) * 1000.0).round() as u32;
+    TYPE_SCALE_MILLI.store(milli, Ordering::Relaxed);
+}
+
+fn scaled(base: f32) -> f32 {
+    base * TYPE_SCALE_MILLI.load(Ordering::Relaxed) as f32 / 1000.0
+}
+
+pub fn title_pt() -> f32 {
+    scaled(TITLE_PT)
+}
+
+pub fn body_pt() -> f32 {
+    scaled(BODY_PT)
+}
+
+pub fn caption_pt() -> f32 {
+    scaled(CAPTION_PT)
+}
 pub const BUTTON_H: f32 = 32.0;
 pub const BUTTON_MIN_W: f32 = 82.0;
 pub const BUTTON_R: u8 = 8;
@@ -21,15 +44,15 @@ pub fn semibold() -> FontFamily {
 }
 
 pub fn title_text(text: impl Into<String>) -> RichText {
-    RichText::new(text).family(semibold()).size(TITLE_PT)
+    RichText::new(text).family(semibold()).size(title_pt())
 }
 
 pub fn body_text(text: impl Into<String>) -> RichText {
-    RichText::new(text).size(BODY_PT)
+    RichText::new(text).size(body_pt())
 }
 
 pub fn caption_text(text: impl Into<String>, color: Color32) -> RichText {
-    RichText::new(text).size(CAPTION_PT).color(color)
+    RichText::new(text).size(caption_pt()).color(color)
 }
 
 pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
@@ -71,7 +94,7 @@ pub fn primary_button(ui: &mut egui::Ui, label: impl Into<String>) -> egui::Resp
     let accent = accent_of(ui);
     let text = RichText::new(label)
         .family(semibold())
-        .size(BODY_PT)
+        .size(body_pt())
         .color(on_accent(accent));
     let btn = egui::Button::new(text)
         .fill(accent)
@@ -84,7 +107,7 @@ pub fn primary_button(ui: &mut egui::Ui, label: impl Into<String>) -> egui::Resp
 pub fn secondary_button(ui: &mut egui::Ui, label: impl Into<String>) -> egui::Response {
     let fill = ui.visuals().widgets.inactive.bg_fill;
     let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
-    let btn = egui::Button::new(RichText::new(label).size(BODY_PT))
+    let btn = egui::Button::new(RichText::new(label).size(body_pt()))
         .fill(fill)
         .stroke(stroke)
         .corner_radius(BUTTON_R)
@@ -96,7 +119,7 @@ pub fn destructive_button(ui: &mut egui::Ui, label: impl Into<String>) -> egui::
     let fill = ui.visuals().error_fg_color;
     let text = RichText::new(label)
         .family(semibold())
-        .size(BODY_PT)
+        .size(body_pt())
         .color(on_accent(fill));
     let btn = egui::Button::new(text)
         .fill(fill)
@@ -143,8 +166,8 @@ pub fn search_field(
             ui.add(
                 egui::TextEdit::singleline(query)
                     .desired_width(f32::INFINITY)
-                    .hint_text(RichText::new(hint).size(BODY_PT).color(muted_of(ui)))
-                    .font(FontId::proportional(BODY_PT))
+                    .hint_text(RichText::new(hint).size(body_pt()).color(muted_of(ui)))
+                    .font(FontId::proportional(body_pt()))
                     .margin(Margin::symmetric(0, 8))
                     .frame(false),
             )
@@ -160,8 +183,8 @@ pub fn well_edit(ui: &mut egui::Ui, text: &mut String, hint: &str, width: f32) -
             ui.add(
                 egui::TextEdit::singleline(text)
                     .desired_width(width)
-                    .hint_text(RichText::new(hint).size(BODY_PT).color(muted_of(ui)))
-                    .font(FontId::proportional(BODY_PT))
+                    .hint_text(RichText::new(hint).size(body_pt()).color(muted_of(ui)))
+                    .font(FontId::proportional(body_pt()))
                     .margin(Margin::symmetric(0, 8))
                     .frame(false),
             )
@@ -266,7 +289,7 @@ pub fn sidebar_item(
         Pos2::new(icon.right() + 8.0, pad.center().y),
         Align2::LEFT_CENTER,
         label,
-        FontId::new(BODY_PT, if selected { semibold() } else { FontFamily::Proportional }),
+        FontId::new(body_pt(), if selected { semibold() } else { FontFamily::Proportional }),
         fg,
     );
     if hovered {

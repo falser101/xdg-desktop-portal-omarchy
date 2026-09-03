@@ -1,4 +1,4 @@
-use super::chrome::{mix, semibold, BODY_PT, CAPTION_PT, TITLE_PT};
+use super::chrome::{self, mix, semibold};
 use crate::theme::OmarchyTheme;
 use egui::{Color32, CornerRadius, FontId, Margin, Shadow, Stroke, Visuals};
 
@@ -19,6 +19,10 @@ pub fn apply(ctx: &egui::Context, theme: &OmarchyTheme) {
     let muted = rgb(theme.muted);
     let accent = rgb(theme.accent_rgb);
     let red = rgb(theme.red);
+    chrome::set_type_scale(theme.type_scale());
+    let body = chrome::body_pt();
+    let caption = chrome::caption_pt();
+    let title = chrome::title_pt();
 
     let well = if dark {
         mix(bg, Color32::BLACK, 0.28)
@@ -36,12 +40,7 @@ pub fn apply(ctx: &egui::Context, theme: &OmarchyTheme) {
         mix(panel, Color32::WHITE, 0.25)
     };
     let hairline = muted.gamma_multiply(if dark { 0.45 } else { 0.35 });
-    let selected = Color32::from_rgba_unmultiplied(
-        accent.r(),
-        accent.g(),
-        accent.b(),
-        if dark { 56 } else { 42 },
-    );
+    let selected = rgb(theme.selection);
 
     visuals.dark_mode = dark;
     visuals.panel_fill = bg;
@@ -124,17 +123,17 @@ pub fn apply(ctx: &egui::Context, theme: &OmarchyTheme) {
     style.spacing.icon_width_inner = 14.0;
     style.text_styles.insert(
         egui::TextStyle::Small,
-        FontId::proportional(CAPTION_PT),
+        FontId::proportional(caption),
     );
     style
         .text_styles
-        .insert(egui::TextStyle::Body, FontId::proportional(BODY_PT));
+        .insert(egui::TextStyle::Body, FontId::proportional(body));
     style
         .text_styles
-        .insert(egui::TextStyle::Button, FontId::proportional(BODY_PT));
+        .insert(egui::TextStyle::Button, FontId::proportional(body));
     style.text_styles.insert(
         egui::TextStyle::Heading,
-        FontId::new(TITLE_PT, semibold()),
+        FontId::new(title, semibold()),
     );
     ctx.set_style(style);
 }
