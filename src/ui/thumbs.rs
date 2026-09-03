@@ -14,7 +14,6 @@ use std::time::UNIX_EPOCH;
 const MAX_INFLIGHT: usize = 3;
 const MAX_FILE_BYTES: u64 = 80 * 1024 * 1024;
 const LIST_PX: u32 = 64;
-const PREVIEW_PX: u32 = 480;
 
 struct Job {
     key: String,
@@ -35,7 +34,6 @@ enum Slot {
 
 pub struct ThumbCache {
     slots: HashMap<String, Slot>,
-    dims: HashMap<PathBuf, Option<(u32, u32)>>,
     inflight: HashSet<String>,
     queued: HashSet<String>,
     queue: VecDeque<Job>,
@@ -48,7 +46,6 @@ impl Default for ThumbCache {
         let (tx, rx) = mpsc::channel();
         Self {
             slots: HashMap::new(),
-            dims: HashMap::new(),
             inflight: HashSet::new(),
             queued: HashSet::new(),
             queue: VecDeque::new(),
@@ -97,22 +94,6 @@ impl ThumbCache {
         };
         paint_image(ui, &tex, rect, true);
         true
-    }
-
-    pub fn preview_tex(&mut self, ctx: &egui::Context, path: &Path) -> Option<TextureHandle> {
-        if !is_image_file(path) {
-            return None;
-        }
-        self.texture(ctx, path, PREVIEW_PX, false)
-    }
-
-    pub fn dimensions(&mut self, path: &Path) -> Option<(u32, u32)> {
-        if let Some(hit) = self.dims.get(path) {
-            return *hit;
-        }
-        let dims = image::image_dimensions(path).ok();
-        self.dims.insert(path.to_path_buf(), dims);
-        dims
     }
 
     fn texture(
@@ -172,12 +153,12 @@ impl ThumbCache {
     }
 }
 
-pub fn is_image_file(path: &Path) -> bool {
+fn is_image_file(path: &Path) -> bool {
     let mime = mime_guess::from_path(path).first_or_octet_stream();
     mime.type_() == mime_guess::mime::IMAGE
 }
 
-pub fn paint_image(ui: &egui::Ui, tex: &TextureHandle, rect: Rect, cover: bool) {
+fn paint_image(ui: &egui::Ui, tex: &TextureHandle, rect: Rect, cover: bool) {
     let uv = if cover {
         let size = tex.size_vec2();
         if size.x <= 0.0 || size.y <= 0.0 || rect.width() <= 0.0 || rect.height() <= 0.0 {

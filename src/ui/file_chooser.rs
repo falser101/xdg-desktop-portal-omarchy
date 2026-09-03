@@ -6,7 +6,7 @@ use super::chrome::{
 };
 use super::glyphs::{self, Glyph};
 use super::icons::IconCache;
-use super::thumbs::{self, ThumbCache};
+use super::thumbs::ThumbCache;
 use super::{cancelled, run_native_sized};
 use crate::desktop::file_icon_names;
 use crate::dict::Choice;
@@ -303,26 +303,43 @@ impl ChooserApp {
             }
             self.selected = vec![path];
         } else if !self.req.directory {
-            self.toggle_select(path);
-        }
-    }
-
-    fn toggle_select(&mut self, path: PathBuf) {
-        if self.req.multiple {
-            if let Some(i) = self.selected.iter().position(|p| *p == path) {
-                self.selected.remove(i);
-            } else {
-                self.selected.push(path);
-            }
-        } else {
             self.selected = vec![path];
         }
     }
 
-    /// KDE FilePicker: click a directory to enter it; click a file to select
-    /// (double-click accepts). After entering, ignore clicks briefly so the
-    /// second half of a double-click cannot hit a file in the new listing.
-    fn on_list_click(&mut self, path: PathBuf, is_dir: bool, double: bool) {
+    fn toggle_select(&mut self, path: PathBuf) {
+        if let Some(i) = self.selected.iter().position(|p| *p == path) {
+            self.selected.remove(i);
+        } else {
+            self.selected.push(path);
+        }
+    }
+
+    fn select_range(&mut self, path: PathBuf) {
+        let Some(end) = self.entries.iter().position(|e| e.path == path) else {
+            self.selected = vec![path];
+            return;
+        };
+        let start = self
+            .selected
+            .last()
+            .and_then(|p| self.entries.iter().position(|e| e.path == *p))
+            .unwrap_or(end);
+        let (a, b) = if start <= end { (start, end) } else { (end, start) };
+        self.selected = self.entries[a..=b]
+            .iter()
+            .filter(|e| if self.req.directory { e.is_dir } else { !e.is_dir })
+            .map(|e| e.path.clone())
+            .collect();
+        if self.selected.is_empty() {
+            self.selected = vec![path];
+        }
+    }
+
+    /// Click a directory to enter it. Click a file to select it (replacing the
+    /// previous selection). Ctrl/Cmd+click toggles when multiple is allowed;
+    /// Shift+click selects a range. Double-click accepts.
+    fn on_list_click(&mut self, path: PathBuf, is_dir: bool, double: bool, modifiers: egui::Modifiers) {
         if is_dir {
             self.go_folder(path);
             self.ignore_list_until = Some(Instant::now() + Duration::from_millis(400));
@@ -333,7 +350,13 @@ impl ChooserApp {
             self.try_accept();
             return;
         }
-        self.toggle_select(path.clone());
+        if self.req.multiple && modifiers.shift {
+            self.select_range(path.clone());
+        } else if self.req.multiple && modifiers.command {
+            self.toggle_select(path.clone());
+        } else {
+            self.selected = vec![path.clone()];
+        }
         if self.req.mode == FileMode::Save {
             if let Some(n) = path.file_name() {
                 self.filename = n.to_string_lossy().into_owned();
@@ -550,23 +573,6 @@ fn draw(
             }
         });
 
-    if let Some(path) = preview_path(app) {
-        if win_w >= 780.0 {
-            egui::SidePanel::right("preview")
-                .resizable(true)
-                .default_width(248.0)
-                .width_range(168.0..=360.0)
-                .frame(
-                    Frame::new()
-                        .fill(sidebar_fill)
-                        .inner_margin(Margin::symmetric(10, 10)),
-                )
-                .show(ctx, |ui| {
-                    draw_preview(ui, icons, thumbs, &path);
-                });
-        }
-    }
-
     egui::CentralPanel::default()
         .frame(Frame::new().fill(panel_fill).inner_margin(Margin::symmetric(8, 6)))
         .show(ctx, |ui| {
@@ -592,6 +598,7 @@ fn draw(
                     .auto_shrink([false, false])
                     .show_rows(ui, ROW_H, entries_len, |ui, range| {
                         let blocked = app.ignore_list_until.is_some_and(|t| Instant::now() < t);
+                        let modifiers = ui.input(|i| i.modifiers);
                         for i in range {
                             let (name, path, is_dir, size, modified) = {
                                 let e = &app.entries[i];
@@ -605,13 +612,14 @@ fn draw(
                                 continue;
                             }
                             if is_dir && row_resp.clicked() {
-                                app.on_list_click(path, true, false);
+                                app.on_list_click(path, true, false, modifiers);
                                 return;
                             } else if row_resp.double_clicked() {
-                                app.on_list_click(path, is_dir, true);
+                                app.on_list_click(path, is_dir, true, modifiers);
                                 return;
                             } else if row_resp.clicked() {
-                                app.on_list_click(path, is_dir, false);
+                                app.on_list_click(path, is_dir, false, modifiers);
+                                return;
                             }
                         }
                     });
@@ -1106,49 +1114,23 @@ fn draw_column_header(ui: &mut egui::Ui, app: &mut ChooserApp) {
     }
 }
 
-fn preview_path(app: &ChooserApp) -> Option<PathBuf> {
-    if app.req.directory || app.selected.len() != 1 {
-        return None;
-    }
-    let path = app.selected.first()?;
-    if path.is_file() && thumbs::is_image_file(path) {
-        Some(path.clone())
-    } else {
-        None
-    }
-}
-
-fn draw_preview(ui: &mut egui::Ui, icons: &mut IconCache, thumbs: &mut ThumbCache, path: &Path) {
-    section_label(ui, "Preview");
-    let width = ui.available_width();
-    let height = (width * 0.72).clamp(120.0, ui.available_height() - 72.0);
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
-    ui.painter()
-        .rect_filled(rect, CornerRadius::same(8), ui.visuals().extreme_bg_color);
-    let inner = rect.shrink(6.0);
-    if let Some(tex) = thumbs.preview_tex(ui.ctx(), path) {
-        thumbs::paint_image(ui, &tex, inner, false);
-    } else {
-        let icon = Rect::from_center_size(inner.center(), Vec2::splat(36.0));
-        icons.paint_at(ui, &file_icon_names(false, path), icon);
-    }
-    ui.add_space(8.0);
-    ui.add(
-        egui::Label::new(body_text(
-            path.file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned(),
-        ))
-        .truncate(),
-    );
-    if let Some((w, h)) = thumbs.dimensions(path) {
-        ui.label(caption_text(format!("{w} × {h}"), chrome::muted_of(ui)));
-    }
-}
-
 /// Paint a file row with no child widgets so the row Sense::click is not stolen.
 fn list_row(
+    ui: &mut egui::Ui,
+    icons: &mut IconCache,
+    thumbs: &mut ThumbCache,
+    name: &str,
+    path: &Path,
+    is_dir: bool,
+    size: u64,
+    modified: Option<std::time::SystemTime>,
+    selected: bool,
+) -> egui::Response {
+    ui.push_id(path, |ui| list_row_inner(ui, icons, thumbs, name, path, is_dir, size, modified, selected))
+        .inner
+}
+
+fn list_row_inner(
     ui: &mut egui::Ui,
     icons: &mut IconCache,
     thumbs: &mut ThumbCache,
