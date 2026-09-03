@@ -285,7 +285,10 @@ pub fn section_label(ui: &mut egui::Ui, text: &str) {
     ui.add_space(2.0);
 }
 
-pub fn dim_overlay(ctx: &egui::Context) {
+/// Full-window dimmer under modal sheets. Returns the click response so a
+/// sheet can dismiss when the user clicks the backdrop. Kept on `Middle` so
+/// `Foreground` windows stay paintable and clickable above it.
+pub fn dim_overlay(ctx: &egui::Context) -> egui::Response {
     let rect = ctx.screen_rect();
     let color = if ctx.style().visuals.dark_mode {
         Color32::from_black_alpha(150)
@@ -294,12 +297,14 @@ pub fn dim_overlay(ctx: &egui::Context) {
     };
     egui::Area::new(egui::Id::new("portal-dim"))
         .fixed_pos(rect.min)
-        .order(Order::Foreground)
+        .order(Order::Middle)
         .interactable(true)
         .show(ctx, |ui| {
-            ui.allocate_response(rect.size(), Sense::click());
+            let resp = ui.allocate_response(rect.size(), Sense::click());
             ui.painter().rect_filled(rect, 0.0, color);
-        });
+            resp
+        })
+        .inner
 }
 
 pub fn sheet_frame(ctx: &egui::Context) -> Frame {

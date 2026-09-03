@@ -492,12 +492,14 @@ impl eframe::App for ChooserUi {
                 close = true;
             } else {
                 draw(ctx, &mut app, &self.theme, &mut self.icons, &mut self.thumbs);
-                if ctx.input(|i| i.key_pressed(Key::Escape))
-                    && app.overwrite.is_none()
-                    && app.new_folder.is_none()
-                    && !app.editing_path
-                {
-                    app.outcome = Outcome::Cancel;
+                if ctx.input(|i| i.key_pressed(Key::Escape)) {
+                    if app.overwrite.is_some() {
+                        app.overwrite = None;
+                    } else if app.new_folder.is_some() {
+                        app.new_folder = None;
+                    } else if !app.editing_path {
+                        app.outcome = Outcome::Cancel;
+                    }
                 }
                 if app.outcome != Outcome::Pending {
                     close = true;
@@ -661,7 +663,10 @@ fn draw(
     }
 
     if app.new_folder.is_some() || app.overwrite.is_some() {
-        dim_overlay(ctx);
+        if dim_overlay(ctx).clicked() {
+            app.new_folder = None;
+            app.overwrite = None;
+        }
     }
 
     if app.new_folder.is_some() {
