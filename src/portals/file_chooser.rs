@@ -59,6 +59,11 @@ impl FileChooser {
         tracing::info!(app_id, title, "FileChooser.SaveFiles");
         self.run(handle, title, options, FileMode::SaveFiles).await
     }
+
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        1
+    }
 }
 
 impl FileChooser {

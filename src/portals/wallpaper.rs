@@ -53,4 +53,9 @@ impl Wallpaper {
             crate::response::PortalResponse::Other => OTHER,
         }
     }
+
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        1
+    }
 }

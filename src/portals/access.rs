@@ -47,4 +47,9 @@ impl Access {
         })
         .await
     }
+
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        1
+    }
 }

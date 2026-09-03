@@ -7,7 +7,7 @@ Artifacts: `/tmp/omarchy-portal-test-report.md`, `/tmp/omarchy-portal-test-repor
 
 | Category | What |
 |----------|------|
-| **env** | systemd units, D-Bus name, portals.conf routing, no user QML plugin, xdph picker, package vs git |
+| **env** | systemd unit present, D-Bus name, portals.conf routing, no user QML plugin, package vs git |
 | **unit** | `cargo test --lib` |
 | **api** | Non-UI or fire-and-forget portal calls via `portal-call.py` |
 | **interactive** | Dialog opens (egui) → Esc cancel |
@@ -18,16 +18,18 @@ Artifacts: `/tmp/omarchy-portal-test-report.md`, `/tmp/omarchy-portal-test-repor
 
 | ID | Expect |
 |----|--------|
-| env.xdg-desktop-portal-omarchy.service | active |
+| env.xdg-desktop-portal-omarchy.service | unit loaded (D-Bus activatable; need not be enabled) |
 | env.xdg-desktop-portal.service | active |
 | env.xdg-desktop-portal-hyprland.service | active |
+| env.desktop | `XDG_CURRENT_DESKTOP` contains Omarchy |
 | env.route.FileChooser | omarchy |
 | env.route.Settings | omarchy |
+| env.route.Screenshot | omarchy |
 | env.route.ScreenCast | hyprland |
+| env.route.Print | gtk |
 | env.route.Secret | gnome-keyring |
 | env.no_user_plugin | `~/.config/omarchy/plugins/omarchy-portal` is absent |
-| env.xdph_picker | `~/.config/hypr/xdph.conf` present |
-| env.dbus_name | `org.freedesktop.impl.portal.desktop.omarchy` owned |
+| env.dbus_name | `org.freedesktop.impl.portal.desktop.omarchy` owned (after activation) |
 | env.package_vs_git | informational |
 
 ### Unit
@@ -60,7 +62,6 @@ Artifacts: `/tmp/omarchy-portal-test-report.md`, `/tmp/omarchy-portal-test-repor
 | ui.screenshot | Screenshot |
 | ui.dynamic-launcher | DynamicLauncher PrepareInstall |
 | ui.pick-color | PickColor / hyprpicker path |
-| ui.share_picker_bin | omarchy-share-picker present |
 
 
 ## Response codes

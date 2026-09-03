@@ -4,6 +4,8 @@
 
 [xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/) backend for Omarchy (Hyprland). Dialogs use the built-in egui picker.
 
+Omarchy sets `XDG_CURRENT_DESKTOP=Omarchy:Hyprland`. xdg-desktop-portal then loads `/usr/share/xdg-desktop-portal/omarchy-portals.conf` and D-Bus-activates this backend. No per-user setup.
+
 ## Implemented
 
 | Portal | What it does |
@@ -22,16 +24,17 @@
 | **Wallpaper** | Set desktop background |
 | **Lockdown** | Stub (`disable-location` on) |
 
-ScreenCast / GlobalShortcuts / InputCapture stay on `xdg-desktop-portal-hyprland`. The share picker is [`omarchy-share-picker`](https://github.com/falser101/omarchy-share-picker). Secret stays on `gnome-keyring`.
+ScreenCast / GlobalShortcuts / InputCapture stay on `xdg-desktop-portal-hyprland`. Print stays on `xdg-desktop-portal-gtk`. Secret stays on `gnome-keyring`.
 
 ## Install
 
+Packaged with Omarchy, or:
+
 ```bash
 yay -S xdg-desktop-portal-omarchy-git
-xdg-desktop-portal-omarchy-setup
 ```
 
-From a checkout: `./scripts/install-user.sh` or `sudo ./scripts/install-system.sh` then `xdg-desktop-portal-omarchy-setup`.
+From a checkout: `./scripts/install-user.sh` or `sudo ./scripts/install-system.sh`. Reload Hyprland or re-login so `XDG_CURRENT_DESKTOP` includes Omarchy.
 
 Packaging: [docs/packaging.md](docs/packaging.md).
 

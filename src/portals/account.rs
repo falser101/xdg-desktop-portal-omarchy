@@ -64,6 +64,11 @@ impl Account {
         })
         .await
     }
+
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        1
+    }
 }
 
 fn app_display_name(app_id: &str) -> String {

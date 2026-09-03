@@ -31,6 +31,11 @@ impl Email {
         })
         .await
     }
+
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        4
+    }
 }
 
 async fn spawn_email(options: &Options) -> anyhow::Result<()> {

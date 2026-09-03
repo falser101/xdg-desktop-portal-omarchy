@@ -72,11 +72,11 @@ install -Dm644 "$ROOT/LICENSE" \
 
 if [[ -z $DESTDIR && $(id -u) -eq 0 ]]; then
   echo "Installed system files under ${PREFIX}"
-  echo "Each user should run: xdg-desktop-portal-omarchy-setup"
 elif [[ -z $DESTDIR ]]; then
   echo "Installed under ${PREFIX} (DESTDIR empty)."
   echo "If this was not root, ensure you have write permission."
-  echo "Each user should run: xdg-desktop-portal-omarchy-setup"
 else
   echo "Staged under DESTDIR=${DESTDIR} PREFIX=${PREFIX}"
 fi
+echo "D-Bus activates the backend. Routing uses ${DATADIR}/xdg-desktop-portal/omarchy-portals.conf"
+echo "when XDG_CURRENT_DESKTOP includes Omarchy (Omarchy:Hyprland)."

@@ -2,12 +2,12 @@ post_install() {
   cat <<'EOF'
 xdg-desktop-portal-omarchy installed.
 
-Each user should run once:
+D-Bus activates the backend. Session routing uses
+/usr/share/xdg-desktop-portal/omarchy-portals.conf when
+XDG_CURRENT_DESKTOP includes Omarchy (Omarchy:Hyprland).
 
-  xdg-desktop-portal-omarchy-setup
-
-Dialogs use the built-in egui picker.
-ScreenCast capture stays on xdg-desktop-portal-hyprland.
+ScreenCast stays on xdg-desktop-portal-hyprland.
+Print stays on xdg-desktop-portal-gtk.
 EOF
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install the portal backend for this user (no root required).
+# User-local install for development (no root, no Hyprland/xdph writes).
+# Routing needs XDG_CURRENT_DESKTOP to include Omarchy (Omarchy:Hyprland).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,11 +9,15 @@ DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 cd "$ROOT"
-cargo build --release
+cargo build --release --locked --bins
 install -Dm755 "$ROOT/target/release/xdg-desktop-portal-omarchy" "$BIN"
 
 install -Dm644 "$ROOT/data/omarchy.portal" \
   "$DATA/xdg-desktop-portal/portals/omarchy.portal"
+install -Dm644 "$ROOT/data/omarchy-portals.conf" \
+  "$DATA/xdg-desktop-portal/omarchy-portals.conf"
+install -Dm644 "$ROOT/data/omarchy-portals.conf" \
+  "$CONFIG/xdg-desktop-portal/omarchy-portals.conf"
 
 install -Dm644 /dev/stdin \
   "$DATA/dbus-1/services/org.freedesktop.impl.portal.desktop.omarchy.service" <<EOF
@@ -39,29 +44,11 @@ Restart=on-failure
 WantedBy=graphical-session.target
 EOF
 
-install -Dm644 "$ROOT/data/omarchy-portals.conf" \
-  "$CONFIG/xdg-desktop-portal/hyprland-portals.conf"
-
-XDPH="$CONFIG/hypr/xdph.conf"
-mkdir -p "$CONFIG/hypr"
-cat >"$XDPH" <<EOF
-screencopy {
-    allow_token_by_default = false
-    custom_picker_binary = omarchy-share-picker
-}
-EOF
-
-HYPR="$CONFIG/hypr/hyprland.lua"
-if [[ -f $HYPR ]] && ! grep -Fq 'xdg-desktop-portal-omarchy' "$HYPR"; then
-  cat >>"$HYPR" <<'EOF'
-
--- Portal dialogs (egui): float + opaque
-o.window("xdg-desktop-portal-omarchy", { tag = "-default-opacity +floating-window", opacity = "1 1" })
-EOF
-fi
-
 systemctl --user daemon-reload
-systemctl --user enable --now xdg-desktop-portal-omarchy.service
-systemctl --user restart xdg-desktop-portal.service xdg-desktop-portal-omarchy.service xdg-desktop-portal-hyprland.service 2>/dev/null || true
+systemctl --user try-restart xdg-desktop-portal-omarchy.service 2>/dev/null || true
+systemctl --user restart xdg-desktop-portal.service 2>/dev/null || true
 
 echo "Installed $BIN"
+echo "D-Bus activates the backend. Do not enable the user unit."
+echo "Routing needs XDG_CURRENT_DESKTOP to include Omarchy (Omarchy:Hyprland)."
+echo "Reload Hyprland or re-login if that value is not set yet."

@@ -58,4 +58,9 @@ impl AppChooser {
     }
 
     async fn update_choices(&self, _handle: ObjectPath<'_>, _choices: Vec<String>) {}
+
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        2
+    }
 }

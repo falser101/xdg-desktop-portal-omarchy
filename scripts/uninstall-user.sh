@@ -9,11 +9,11 @@ systemctl --user disable --now xdg-desktop-portal-omarchy.service 2>/dev/null ||
 
 rm -fv \
   "$HOME/.local/libexec/xdg-desktop-portal-omarchy" \
-  "$HOME/.local/libexec/omarchy-portal-capture" \
-  "$HOME/.local/bin/omarchy-share-picker" \
   "$DATA/xdg-desktop-portal/portals/omarchy.portal" \
+  "$DATA/xdg-desktop-portal/omarchy-portals.conf" \
   "$DATA/dbus-1/services/org.freedesktop.impl.portal.desktop.omarchy.service" \
-  "$CONFIG/systemd/user/xdg-desktop-portal-omarchy.service"
+  "$CONFIG/systemd/user/xdg-desktop-portal-omarchy.service" \
+  "$CONFIG/xdg-desktop-portal/omarchy-portals.conf"
 
 rm -rf "$CONFIG/omarchy/plugins/omarchy-portal"
 
@@ -22,6 +22,18 @@ rmdir "$DATA/xdg-desktop-portal/portals" 2>/dev/null || true
 rmdir "$DATA/xdg-desktop-portal" 2>/dev/null || true
 rmdir "$DATA/dbus-1/services" 2>/dev/null || true
 rmdir "$DATA/dbus-1" 2>/dev/null || true
+
+# Drop the old setup-user.sh copy of omarchy-portals.conf if it is still the
+# shipped file under the Hyprland name. Leave it if the user edited it.
+legacy="$CONFIG/xdg-desktop-portal/hyprland-portals.conf"
+shipped=/usr/share/xdg-desktop-portal/omarchy-portals.conf
+if [[ -f $legacy ]]; then
+  if [[ -f $shipped ]] && cmp -s "$legacy" "$shipped"; then
+    rm -fv "$legacy"
+  elif grep -Fq 'default=omarchy;hyprland;gtk' "$legacy" && grep -Fq 'Screenshot=omarchy' "$legacy"; then
+    rm -fv "$legacy"
+  fi
+fi
 
 python3 - <<'PY'
 import json, os
@@ -40,4 +52,5 @@ if new != plugins:
 PY
 
 systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user restart xdg-desktop-portal.service 2>/dev/null || true
 echo "Removed user-level portal install."

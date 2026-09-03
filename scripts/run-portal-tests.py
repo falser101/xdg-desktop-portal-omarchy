@@ -284,11 +284,43 @@ def unit_tests() -> CaseResult:
     )
 
 
+def portals_conf_text() -> tuple[Path | None, str]:
+    home = Path.home()
+    candidates = [
+        home / ".config/xdg-desktop-portal/omarchy-portals.conf",
+        Path("/usr/share/xdg-desktop-portal/omarchy-portals.conf"),
+        home / ".local/share/xdg-desktop-portal/omarchy-portals.conf",
+        home / ".config/xdg-desktop-portal/hyprland-portals.conf",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path, path.read_text()
+    return None, ""
+
+
+def route_ok(text: str, key: str, want: str) -> bool:
+    line = next((ln for ln in text.splitlines() if f"portal.{key}=" in ln), "")
+    if line:
+        return want in line.split("=", 1)[-1]
+    if key in ("FileChooser", "Settings", "Screenshot"):
+        return f"default={want}" in text or f"default={want};" in text.replace(" ", "")
+    return False
+
+
 def check_env() -> list[CaseResult]:
     cases = []
-    # services
+    r = run(["systemctl", "--user", "cat", "xdg-desktop-portal-omarchy.service"], timeout=5)
+    cases.append(
+        CaseResult(
+            "env.xdg-desktop-portal-omarchy.service",
+            "service xdg-desktop-portal-omarchy.service",
+            "env",
+            "unit loaded (D-Bus activatable)",
+            "pass" if r.returncode == 0 else "fail",
+            (r.stdout or r.stderr or "").splitlines()[0] if (r.stdout or r.stderr) else "",
+        )
+    )
     for unit in (
-        "xdg-desktop-portal-omarchy.service",
         "xdg-desktop-portal.service",
         "xdg-desktop-portal-hyprland.service",
     ):
@@ -305,20 +337,28 @@ def check_env() -> list[CaseResult]:
             )
         )
 
-    # routing
-    conf = Path.home() / ".config/xdg-desktop-portal/hyprland-portals.conf"
-    text = conf.read_text() if conf.exists() else ""
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    cases.append(
+        CaseResult(
+            "env.desktop",
+            "XDG_CURRENT_DESKTOP includes Omarchy",
+            "env",
+            "Omarchy:Hyprland",
+            "pass" if "omarchy" in desktop.lower() else "warn",
+            desktop or "(unset)",
+        )
+    )
+
+    conf_path, text = portals_conf_text()
     for key, want in [
         ("FileChooser", "omarchy"),
         ("Settings", "omarchy"),
+        ("Screenshot", "omarchy"),
         ("ScreenCast", "hyprland"),
+        ("Print", "gtk"),
         ("Secret", "gnome-keyring"),
     ]:
-        line = next((ln for ln in text.splitlines() if f"portal.{key}" in ln), "")
-        ok = want in line or (key == "FileChooser" and "default=omarchy" in text and not line)
-        # FileChooser may come from default=
-        if key == "FileChooser":
-            ok = "omarchy" in text and ("FileChooser=omarchy" in text or "default=omarchy" in text)
+        ok = route_ok(text, key, want)
         cases.append(
             CaseResult(
                 f"env.route.{key}",
@@ -326,7 +366,7 @@ def check_env() -> list[CaseResult]:
                 "env",
                 f"config contains {want}",
                 "pass" if ok else "fail",
-                line or text[:200],
+                (conf_path and f"{conf_path}: " or "") + (text[:200] if not ok else f"{key}={want}"),
             )
         )
 
@@ -339,21 +379,6 @@ def check_env() -> list[CaseResult]:
             "omarchy-portal plugin absent",
             "pass" if not plugin.exists() else "warn",
             str(plugin),
-        )
-    )
-
-    # xdph picker
-    xdph = Path.home() / ".config/hypr/xdph.conf"
-    xdph_text = xdph.read_text() if xdph.exists() else ""
-    picker_ok = "omarchy-share-picker" in xdph_text
-    cases.append(
-        CaseResult(
-            "env.xdph_picker",
-            "xdph.conf uses omarchy-share-picker",
-            "env",
-            "configured",
-            "pass" if picker_ok else "warn",
-            xdph_text.strip() or "(missing xdph.conf)",
         )
     )
 
@@ -371,8 +396,25 @@ def check_env() -> list[CaseResult]:
         )
     )
 
-    # dbus name owned
+    # dbus name owned (activate via Settings.Read if idle)
     r = run(["busctl", "--user", "status", "org.freedesktop.impl.portal.desktop.omarchy"], timeout=5)
+    if r.returncode != 0:
+        run(
+            [
+                "busctl",
+                "--user",
+                "call",
+                "org.freedesktop.impl.portal.desktop.omarchy",
+                "/org/freedesktop/portal/desktop",
+                "org.freedesktop.impl.portal.Settings",
+                "Read",
+                "ss",
+                "org.freedesktop.appearance",
+                "color-scheme",
+            ],
+            timeout=10,
+        )
+        r = run(["busctl", "--user", "status", "org.freedesktop.impl.portal.desktop.omarchy"], timeout=5)
     cases.append(
         CaseResult(
             "env.dbus_name",
@@ -526,52 +568,6 @@ def main() -> int:
             int((time.time() - t0) * 1000),
         )
     )
-
-    # ScreenCast picker binary smoke (no full OBS flow)
-    print("=== screencast picker smoke ===", flush=True)
-    picker = Path.home() / ".local/bin/omarchy-share-picker"
-    fallback = Path("/usr/bin/omarchy-share-picker")
-    picker_path = picker if picker.exists() else fallback
-    if picker_path.exists():
-        env = os.environ.copy()
-        env["XDPH_WINDOW_SHARING_LIST"] = ""
-        # share picker without XDPH env may exit quickly
-        try:
-            r = run([str(picker_path)], timeout=3, env=env)
-            results.append(
-                CaseResult(
-                    "ui.share_picker_bin",
-                    "omarchy-share-picker executable",
-                    "interactive",
-                    "runs (may exit without XDPH env)",
-                    "pass",
-                    f"path={picker_path} rc={r.returncode} out={(r.stdout or r.stderr or '')[-200:]}",
-                )
-            )
-        except subprocess.TimeoutExpired:
-            run(["wtype", "-k", "Escape"], timeout=5)
-            run(["pkill", "-f", "omarchy-share-picker"], timeout=5)
-            results.append(
-                CaseResult(
-                    "ui.share_picker_bin",
-                    "omarchy-share-picker executable",
-                    "interactive",
-                    "opens UI when invoked",
-                    "pass",
-                    f"path={picker_path} stayed running >3s (UI likely open); sent Escape",
-                )
-            )
-    else:
-        results.append(
-            CaseResult(
-                "ui.share_picker_bin",
-                "omarchy-share-picker executable",
-                "interactive",
-                "binary exists",
-                "fail",
-                "not found in ~/.local/bin or /usr/bin",
-            )
-        )
 
     # Inhibit: call via gdbus CreateMonitor / Inhibit if possible — soft check journal
     print("=== inhibit journal ===", flush=True)
