@@ -6,6 +6,7 @@ use super::chrome::{
 };
 use super::glyphs::{self, Glyph};
 use super::icons::IconCache;
+use super::thumbs::{self, ThumbCache};
 use super::{cancelled, run_native_sized};
 use crate::desktop::file_icon_names;
 use crate::dict::Choice;
@@ -90,6 +91,7 @@ pub fn run_file_chooser(
             state: ui_state,
             token,
             icons: IconCache::default(),
+            thumbs: ThumbCache::default(),
             theme: OmarchyTheme::load(),
         },
     );
@@ -444,6 +446,7 @@ struct ChooserUi {
     state: Arc<Mutex<ChooserApp>>,
     token: CancellationToken,
     icons: IconCache,
+    thumbs: ThumbCache,
     theme: OmarchyTheme,
 }
 
@@ -457,6 +460,7 @@ impl eframe::App for ChooserUi {
             return;
         }
         ctx.request_repaint_after(Duration::from_millis(120));
+        self.thumbs.poll(ctx);
 
         let mut close = false;
         {
@@ -464,7 +468,7 @@ impl eframe::App for ChooserUi {
             if app.outcome != Outcome::Pending {
                 close = true;
             } else {
-                draw(ctx, &mut app, &self.theme, &mut self.icons);
+                draw(ctx, &mut app, &self.theme, &mut self.icons, &mut self.thumbs);
                 if ctx.input(|i| i.key_pressed(Key::Escape))
                     && app.overwrite.is_none()
                     && app.new_folder.is_none()
@@ -483,7 +487,13 @@ impl eframe::App for ChooserUi {
     }
 }
 
-fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: &mut IconCache) {
+fn draw(
+    ctx: &egui::Context,
+    app: &mut ChooserApp,
+    theme: &OmarchyTheme,
+    icons: &mut IconCache,
+    thumbs: &mut ThumbCache,
+) {
     if app.query != app.last_query {
         app.last_query = app.query.clone();
         app.refresh();
@@ -540,6 +550,23 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
             }
         });
 
+    if let Some(path) = preview_path(app) {
+        if win_w >= 780.0 {
+            egui::SidePanel::right("preview")
+                .resizable(true)
+                .default_width(248.0)
+                .width_range(168.0..=360.0)
+                .frame(
+                    Frame::new()
+                        .fill(sidebar_fill)
+                        .inner_margin(Margin::symmetric(10, 10)),
+                )
+                .show(ctx, |ui| {
+                    draw_preview(ui, icons, thumbs, &path);
+                });
+        }
+    }
+
     egui::CentralPanel::default()
         .frame(Frame::new().fill(panel_fill).inner_margin(Margin::symmetric(8, 6)))
         .show(ctx, |ui| {
@@ -547,47 +574,48 @@ fn draw(ctx: &egui::Context, app: &mut ChooserApp, theme: &OmarchyTheme, icons: 
             ui.add_space(2.0);
             hairline(ui);
             ui.add_space(2.0);
-            ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    let blocked = app.ignore_list_until.is_some_and(|t| Instant::now() < t);
-                    let entries_len = app.entries.len();
-                    if entries_len == 0 {
-                        ui.add_space(48.0);
-                        ui.vertical_centered(|ui| {
-                            ui.label(caption_text(
-                                if app.query.is_empty() {
-                                    "No Items"
-                                } else {
-                                    "No Matching Items"
-                                },
-                                chrome::muted_of(ui),
-                            ));
-                        });
-                    }
-                    for i in 0..entries_len {
-                        let (name, path, is_dir, size, modified) = {
-                            let e = &app.entries[i];
-                            (e.name.clone(), e.path.clone(), e.is_dir, e.size, e.modified)
-                        };
-                        let selected = app.selected.contains(&path);
-                        let row_resp = list_row(
-                            ui, icons, &name, &path, is_dir, size, modified, selected,
-                        );
-                        if blocked {
-                            continue;
-                        }
-                        if is_dir && row_resp.clicked() {
-                            app.on_list_click(path, true, false);
-                            break;
-                        } else if row_resp.double_clicked() {
-                            app.on_list_click(path, is_dir, true);
-                            break;
-                        } else if row_resp.clicked() {
-                            app.on_list_click(path, is_dir, false);
-                        }
-                    }
+            let entries_len = app.entries.len();
+            if entries_len == 0 {
+                ui.add_space(48.0);
+                ui.vertical_centered(|ui| {
+                    ui.label(caption_text(
+                        if app.query.is_empty() {
+                            "No Items"
+                        } else {
+                            "No Matching Items"
+                        },
+                        chrome::muted_of(ui),
+                    ));
                 });
+            } else {
+                ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show_rows(ui, ROW_H, entries_len, |ui, range| {
+                        let blocked = app.ignore_list_until.is_some_and(|t| Instant::now() < t);
+                        for i in range {
+                            let (name, path, is_dir, size, modified) = {
+                                let e = &app.entries[i];
+                                (e.name.clone(), e.path.clone(), e.is_dir, e.size, e.modified)
+                            };
+                            let selected = app.selected.contains(&path);
+                            let row_resp = list_row(
+                                ui, icons, thumbs, &name, &path, is_dir, size, modified, selected,
+                            );
+                            if blocked {
+                                continue;
+                            }
+                            if is_dir && row_resp.clicked() {
+                                app.on_list_click(path, true, false);
+                                return;
+                            } else if row_resp.double_clicked() {
+                                app.on_list_click(path, is_dir, true);
+                                return;
+                            } else if row_resp.clicked() {
+                                app.on_list_click(path, is_dir, false);
+                            }
+                        }
+                    });
+            }
         });
 
     if ctx.input(|i| i.key_pressed(Key::Backspace))
@@ -1078,10 +1106,52 @@ fn draw_column_header(ui: &mut egui::Ui, app: &mut ChooserApp) {
     }
 }
 
+fn preview_path(app: &ChooserApp) -> Option<PathBuf> {
+    if app.req.directory || app.selected.len() != 1 {
+        return None;
+    }
+    let path = app.selected.first()?;
+    if path.is_file() && thumbs::is_image_file(path) {
+        Some(path.clone())
+    } else {
+        None
+    }
+}
+
+fn draw_preview(ui: &mut egui::Ui, icons: &mut IconCache, thumbs: &mut ThumbCache, path: &Path) {
+    section_label(ui, "Preview");
+    let width = ui.available_width();
+    let height = (width * 0.72).clamp(120.0, ui.available_height() - 72.0);
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(8), ui.visuals().extreme_bg_color);
+    let inner = rect.shrink(6.0);
+    if let Some(tex) = thumbs.preview_tex(ui.ctx(), path) {
+        thumbs::paint_image(ui, &tex, inner, false);
+    } else {
+        let icon = Rect::from_center_size(inner.center(), Vec2::splat(36.0));
+        icons.paint_at(ui, &file_icon_names(false, path), icon);
+    }
+    ui.add_space(8.0);
+    ui.add(
+        egui::Label::new(body_text(
+            path.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+        ))
+        .truncate(),
+    );
+    if let Some((w, h)) = thumbs.dimensions(path) {
+        ui.label(caption_text(format!("{w} × {h}"), chrome::muted_of(ui)));
+    }
+}
+
 /// Paint a file row with no child widgets so the row Sense::click is not stolen.
 fn list_row(
     ui: &mut egui::Ui,
     icons: &mut IconCache,
+    thumbs: &mut ThumbCache,
     name: &str,
     path: &Path,
     is_dir: bool,
@@ -1115,7 +1185,7 @@ fn list_row(
     );
     if is_dir {
         glyphs::paint(ui, icon_rect, Glyph::Folder, fg);
-    } else {
+    } else if !thumbs.paint_list(ui, path, false, icon_rect) {
         icons.paint_at(ui, &file_icon_names(false, path), icon_rect);
     }
     let date = format_time(modified);

@@ -5,6 +5,7 @@ mod file_chooser;
 mod fonts;
 mod glyphs;
 mod icons;
+mod thumbs;
 mod visuals;
 
 pub use app_chooser::{run_app_chooser, AppChooserRequest};

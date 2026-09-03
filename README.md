@@ -8,7 +8,7 @@
 
 | Portal | What it does |
 |--------|----------------|
-| **FileChooser** | Open / Save / SaveFiles |
+| **FileChooser** | Open / Save / SaveFiles, image thumbnails |
 | **Settings** | Appearance / accent color |
 | **AppChooser** | Open-with; optional set-as-default |
 | **Account** | User name / avatar |

@@ -8,7 +8,7 @@ Omarchy（Hyprland）的 [xdg-desktop-portal](https://flatpak.github.io/xdg-desk
 
 | Portal | 能力 |
 |--------|------|
-| **FileChooser** | Open / Save / SaveFiles |
+| **FileChooser** | Open / Save / SaveFiles，图片缩略图预览 |
 | **Settings** | 外观 / 强调色 |
 | **AppChooser** | 打开方式；可选设为默认 |
 | **Account** | 用户名 / 头像 |
