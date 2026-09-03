@@ -599,6 +599,7 @@ fn draw(
                     .show_rows(ui, ROW_H, entries_len, |ui, range| {
                         let blocked = app.ignore_list_until.is_some_and(|t| Instant::now() < t);
                         let modifiers = ui.input(|i| i.modifiers);
+                        let mut click = None;
                         for i in range {
                             let (name, path, is_dir, size, modified) = {
                                 let e = &app.entries[i];
@@ -608,19 +609,19 @@ fn draw(
                             let row_resp = list_row(
                                 ui, icons, thumbs, &name, &path, is_dir, size, modified, selected,
                             );
-                            if blocked {
+                            if blocked || click.is_some() {
                                 continue;
                             }
                             if is_dir && row_resp.clicked() {
-                                app.on_list_click(path, true, false, modifiers);
-                                return;
+                                click = Some((path, true, false));
                             } else if row_resp.double_clicked() {
-                                app.on_list_click(path, is_dir, true, modifiers);
-                                return;
+                                click = Some((path, is_dir, true));
                             } else if row_resp.clicked() {
-                                app.on_list_click(path, is_dir, false, modifiers);
-                                return;
+                                click = Some((path, is_dir, false));
                             }
+                        }
+                        if let Some((path, is_dir, double)) = click {
+                            app.on_list_click(path, is_dir, double, modifiers);
                         }
                     });
             }
